@@ -1,2 +1,4 @@
 output/
-.o
+src/*.o
+src/*.d
+dcas
