@@ -10,6 +10,8 @@ TARGET  = dcas
 LDFLAGS =
 LIBS =
 
+CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99
+
 #
 # COMPILER/ASSEMBLER INVOCATIONS
 #
@@ -57,15 +59,15 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 # TARGETS
 #
 
+.PHONY: all
+all : static $(TARGET)
+
 $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
-.PHONY: all
-all : $(TARGET)
-
-.PHONY: check
-check : test.sh $(TARGET)
-	bash ./test.sh
+.PHONY: static
+static :
+	cppcheck $(CPPCHECK_FLAGS) src
 
 .PHONY: clean
 clean :
