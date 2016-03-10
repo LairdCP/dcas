@@ -5,12 +5,12 @@
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES = #-I and then include paths
+INCLUDES = -Isrc/include
 TARGET  = dcas
 LDFLAGS =
 LIBS =
 
-CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99
+CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 
 #
 # COMPILER/ASSEMBLER INVOCATIONS

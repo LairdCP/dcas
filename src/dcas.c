@@ -1,7 +1,10 @@
 #include <stdio.h>
+#include "debug.h"
+
  
 int main()
 {
-  printf("Hello world\n");
-  return 0;
+	REPORT_ENTRY_DEBUG;
+	printf("Hello world\n");
+	return 0;
 }
