@@ -14,7 +14,7 @@ typedef enum _WF_LOGLEVEL {
 #ifdef DEBUG_BUILD
 #define DbgPrintfLvl(level, format, ...)\
 do { \
-	fprintf(stderr, "[" #level "] " format, __VA_ARGS__); \
+	fprintf(stderr, "[" #level "] " format, ##__VA_ARGS__); \
 	} while (0)
 
 //helpers
