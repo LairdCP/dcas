@@ -11,7 +11,7 @@ LDFLAGS =
 LIBS =
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
-
+CHECK_ARGS =
 #
 # COMPILER/ASSEMBLER INVOCATIONS
 #
@@ -60,14 +60,24 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 #
 
 .PHONY: all
-all : static $(TARGET)
+all : static unit $(TARGET) check
 
 $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
 .PHONY: static
 static :
+	@printf "\n#\n# Doing static analysis\n#\n"
 	cppcheck $(CPPCHECK_FLAGS) src
+
+.PHONY: unit
+unit:
+	@printf "\n#\n# Doing unit tests\n#\n"
+
+.PHONY: check
+check:
+	@printf "\n#\n# Doing run test\n#\n"
+	@./$(TARGET) $(CHECK_ARGS) || (printf "\n==========================================\n|||| $(TARGET) run failed $$?\a\n\n"; exit 1)
 
 .PHONY: clean
 clean :
