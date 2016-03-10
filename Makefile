@@ -12,21 +12,23 @@ LIBS =
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
+
+CFLAGS += -Wall -Werror --std=c99
 #
 # COMPILER/ASSEMBLER INVOCATIONS
 #
 # Define RELEASE=1 on the command line to get 
 # We redefine CC to ensure gcc is used as 'cc' is the make default
 ifdef RELEASE
-  CFLAGS += -Wall -O3 $(INCLUDES)
-  CXXFLAGS += -Wall -O3 $(INCLUDES)
+  CFLAGS +=  -O3 $(INCLUDES)
+  CXXFLAGS +=  -O3 $(INCLUDES)
 else
   define DEBUGTXT
     @printf "\n#\n# Define RELEASE=1 on the command line to compile release version.\n"
     @printf "# Assuming debug compile. \n#\n"
   endef
-  CFLAGS += -ggdb -fno-inline -Wall -DDEBUG_BUILD $(INCLUDES)
-  CXXFLAGS += -ggdb -fno-inline -Wall -DDEBUG_BUILD $(INCLUDES)
+  CFLAGS += -ggdb -fno-inline -DDEBUG_BUILD $(INCLUDES)
+  CXXFLAGS += -ggdb -fno-inline -DDEBUG_BUILD $(INCLUDES)
 endif
 
 CC = gcc
