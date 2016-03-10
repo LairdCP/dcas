@@ -1,6 +1,12 @@
 #
 # Project name: DCAS
 ##############################################################################
+VERSION = 3
+PATCHLEVEL = 5
+SUBLEVEL = 3
+EXTRAVERSION =
+
+LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
@@ -13,7 +19,7 @@ LIBS =
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
 
-CFLAGS += -Wall -Werror --std=c99
+CFLAGS += -Wall -Werror --std=c99 -D_LRD_VERSION_STRING=\"$(LRD_VERSION)\"
 #
 # COMPILER/ASSEMBLER INVOCATIONS
 #
