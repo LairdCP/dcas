@@ -27,6 +27,7 @@ static char * runtime_name = "";
 
 #define LAIRD_HELLO "HELLO DCAS"
 #define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
+#define LAIRD_BAD_BUFFER "BAD FLAT BUFFER"
 
 #define KEYS_FOLDER "./test/"
 static int auth_password(const char *user, const char *password)
@@ -86,10 +87,16 @@ static int authenticate(ssh_session session)
 	return 0;
 }
 
-int is_handshake_valid(void *buffer)
+int is_handshake_valid(void *buffer, size_t size)
 {
 	ns(Handshake_table_t) handshake;
 	const char * ip;
+	int ret;
+
+	if((ret = ns(Handshake_verify_as_root(buffer, size, ns(Handshake_identifier))))){
+		printf("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
+		return 0;
+	}
 
 	if (!(handshake = ns(Handshake_as_root(buffer)))) {
 		DBGERROR("Not a handshake\n");
@@ -223,10 +230,16 @@ int run_sshserver( void )
 				ssh_channel_write(chan, "\r\n", 2);
 			else {
 				buf[i] = '\0'; // be sure it's null terminated
-				DBGINFO("Got from client: %s\n", buf);
-				if (is_handshake_valid(buf)) {
+				DBGINFO("Got %d bytes from client: %s\n", i, buf);
+				if (is_handshake_valid(buf, i)) {
 					DBGINFO("Got good protocol HELLO\n");
 					ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
+					break;
+				}
+				else
+				{
+					DBGINFO("failed to get HELLO\n");
+					ssh_channel_write(chan, LAIRD_BAD_BUFFER, sizeof(LAIRD_BAD_BUFFER));
 					break;
 				}
 			}
