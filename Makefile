@@ -87,6 +87,53 @@ check:
 	@printf "\n#\n# Doing run test\n#\n"
 	@./$(TARGET) $(CHECK_ARGS) || (printf "\n==========================================\n|||| $(TARGET) run failed $$?\a\n\n"; exit 1)
 
+
+#
+# Library builds
+#
+.PHONY: libssh
+lib:
+	mkdir -p lib
+
+lib/libssh:
+	cd lib && git clone git://git.libssh.org/projects/libssh.git
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	LIBSSH_TARGET := lib/libssh/build/src/libssh.so.4.4.0
+endif
+ifeq ($(UNAME_S),Darwin)
+	LIBSSH_TARGET := lib/libssh/build/src/libssh.4.4.0.dylib
+endif
+$(LIBSSH_TARGET): lib lib/libssh
+	cd lib/libssh && git checkout 4d43fbfb50710055352c4fda812b6dc98143d336
+	mkdir -p lib/libssh/build
+	cd lib/libssh/build && cmake ..
+	cd lib/libssh/build && make
+
+.PHONY: libssh
+libssh: $(LIBSSH_TARGET)
+
+libssh_install: $(LIBSSH_TARGET)
+	cd lib/libssh/build && make install
+
+#
+# Tools/testing
+#
+test/client/dcas-client:
+	cd test/client && make
+
+.PHONY: do-dcas-test
+do-dcas-test:
+	cd test/client && make check
+
+.PHONY: dcas-test
+dcas-test: test/client/dcas-client do-dcas-test
+
+#
+# Utility
+#
+
 .PHONY: clean
 clean :
 	-rm -f $(OBJECTS)
