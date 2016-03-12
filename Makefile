@@ -61,7 +61,7 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 %.o: %.c
 	$(COMPILE.c) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
 
-GENERATED = 	schema/flatbuffers_common_reader.h schema/flatbuffers_common_builder.h
+GENERATED = 	schema/dcal_reader.h
 
 .DONE:
 
@@ -76,11 +76,8 @@ all : $(GENERATED) static unit $(TARGET) check
 $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
-schema/flatbuffers_common_reader.h: schema/dcal.fbs
-	cd schema && ../lib/flatcc/bin/flatcc -ca
-
-schema/flatbuffers_common_builder.h: schema/dcal.fbs
-	cd schema && ../lib/flatcc/bin/flatcc -ca
+schema/dcal_reader.h : schema/dcal.fbs
+	cd schema && ../lib/flatcc/bin/flatcc -ca dcal.fbs
 
 
 
@@ -166,6 +163,7 @@ clean :
 	-rm -f $(OBJECTS)
 	-rm -f $(DEPENDS)
 	-rm -f $(TARGET)
+	-rm -f schema/*.h
 
 .PHONY: cleanall
 cleanall: clean

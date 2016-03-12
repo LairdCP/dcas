@@ -10,8 +10,9 @@
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 
-#include "../schema/flatbuffers_common_reader.h"
-#include "../schema/flatbuffers_common_builder.h"
+#include "../schema/dcal_reader.h"
+#include "../schema/dcal_builder.h"
+#include "../schema/dcal_verifier.h"
 #undef ns
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(DCAL_session, x)
 
@@ -95,15 +96,15 @@ int is_handshake_valid(void *buffer)
 		return 0;
 	}
 
-	if (ns(server(handshake)) == true) {
+	if (ns(Handshake_server(handshake)) == true) {
 		DBGERROR("Handshake marked as from server\n");
 		return 0;
 	}
 
-	ip = ns(ip(handshake));
+	ip = ns(Handshake_ip(handshake));
 	DBGINFO("Got ip: %s\n", ip);
 
-	if (ns(magic(handshake)) == ns(Magic_HELLO))
+	if (ns(Handshake_magic(handshake)) == ns(Magic_HELLO))
 		return 1;
 
 	return 0;
