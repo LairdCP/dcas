@@ -11,10 +11,10 @@ LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUB
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES = -Isrc/include
+INCLUDES = -Isrc/include -Ilib/flatcc/include
 TARGET  = dcas
-LDFLAGS =
-LIBS = -lssh
+LDFLAGS = -Llib/flatcc/lib
+LIBS = -lssh -lflatccrt
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
@@ -55,10 +55,12 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 # setup right
 
 %.o: %.cpp
-	$(COMPILE.cpp) -MMD -MP -o $@ $<
+	$(COMPILE.cpp) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
 
 %.o: %.c
-	$(COMPILE.c) -MMD -MP -o $@ $<
+	$(COMPILE.c) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
+
+GENERATED = 	schema/flatbuffers_common_reader.h schema/flatbuffers_common_builder.h
 
 .DONE:
 
@@ -68,10 +70,19 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 #
 
 .PHONY: all
-all : static unit $(TARGET) check
+all : $(GENERATED) static unit $(TARGET) check
 
 $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
+
+schema/flatbuffers_common_reader.h: schema/dcal.fbs
+	cd schema && ../lib/flatcc/bin/flatcc -ca
+
+schema/flatbuffers_common_builder.h: schema/dcal.fbs
+	cd schema && ../lib/flatcc/bin/flatcc -ca
+
+
+
 
 .PHONY: static
 static :
@@ -86,7 +97,6 @@ unit:
 check:
 	@printf "\n#\n# Doing run test\n#\n"
 	@./$(TARGET) $(CHECK_ARGS) || (printf "\n==========================================\n|||| $(TARGET) run failed $$?\a\n\n"; exit 1)
-
 
 #
 # Library builds

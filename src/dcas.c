@@ -10,6 +10,11 @@
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 
+#include "../schema/flatbuffers_common_reader.h"
+#include "../schema/flatbuffers_common_builder.h"
+#undef ns
+#define ns(x) FLATBUFFERS_WRAP_NAMESPACE(DCAL_session, x)
+
 void PrintVersion( void );
 void PrintHelp( void );
 void ExitClean( int ExitVal );
@@ -79,6 +84,31 @@ static int authenticate(ssh_session session)
 	} while (1);
 	return 0;
 }
+
+int is_handshake_valid(void *buffer)
+{
+	ns(Handshake_table_t) handshake;
+	const char * ip;
+
+	if (!(handshake = ns(Handshake_as_root(buffer)))) {
+		DBGERROR("Not a handshake\n");
+		return 0;
+	}
+
+	if (ns(server(handshake)) == true) {
+		DBGERROR("Handshake marked as from server\n");
+		return 0;
+	}
+
+	ip = ns(ip(handshake));
+	DBGINFO("Got ip: %s\n", ip);
+
+	if (ns(magic(handshake)) == ns(Magic_HELLO))
+		return 1;
+
+	return 0;
+}
+
 int run_sshserver( void )
 {
 	ssh_session session;
@@ -179,6 +209,10 @@ int run_sshserver( void )
 	}
 
 	printf("Client connected!\n");
+
+	flatcc_builder_t builder;
+	flatcc_builder_init(&builder);
+
 	do {
 		i=ssh_channel_read(chan,buf, 2048, 0);
 		if(i>0) {
@@ -189,7 +223,7 @@ int run_sshserver( void )
 			else {
 				buf[i] = '\0'; // be sure it's null terminated
 				DBGINFO("Got from client: %s\n", buf);
-				if (strncmp(buf, LAIRD_HELLO, sizeof(LAIRD_HELLO)) == 0) {
+				if (is_handshake_valid(buf)) {
 					DBGINFO("Got good protocol HELLO\n");
 					ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
 					break;
@@ -198,6 +232,8 @@ int run_sshserver( void )
 
 		}
 	} while (i>0);
+
+	flatcc_builder_clear(&builder);
 	ssh_channel_close(chan);
 	ssh_disconnect(session);
 	ssh_bind_free(sshbind);
