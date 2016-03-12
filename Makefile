@@ -16,6 +16,7 @@ TARGET  = dcas
 LDFLAGS = -Llib/flatcc/lib
 LIBS = -lssh -lflatccrt
 
+CPPCHECK := $(shell cppcheck --version 2>/dev/null)
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
 
@@ -87,7 +88,12 @@ schema/flatbuffers_common_builder.h: schema/dcal.fbs
 .PHONY: static
 static :
 	@printf "\n#\n# Doing static analysis\n#\n"
+ifdef CPPCHECK
+	@echo "ccpcheck version $(CPPCHECK)"
 	cppcheck $(CPPCHECK_FLAGS) src
+else
+	    @echo ccpcheck not found - skipping
+endif
 
 .PHONY: unit
 unit:
