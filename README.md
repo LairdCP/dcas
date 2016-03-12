@@ -12,10 +12,17 @@ OpenSSL is licensed under the OpenSSL license
 Requirements
 --------------
 
-OpenSSL
+### Tools ###
+
 cmake
-libssh
 cppcheck
+FlatCC
+
+### Libraries ###
+
+OpenSSL
+libssh
+FlatCC
 
 Quick Start
 -----------
@@ -27,8 +34,9 @@ Quick Start is a misnomer perhaps, because our build system doesn't quite do eve
 3. Install OpenSSL - libssh uses this `sudo apt-get install libssl-dev`
 4. Do the build for libssh: `make libssh`
 5. Install libssh - for now our makefiles assume a system-install of libssh, the default puts it into /usr/local/bin so it's not a big deal: `sudo make libssh-install`
-6. After this, you should be able to build dcas: `make` *if successful, dcas will be running*
-7. In a *second terminal window*, build dcas-client and test: `make dcas-test`
+6. Build FlatCC - flatcc both provides a build tool and is a library that dcas utilizes. `make flatcc`
+7. After this, you should be able to build dcas: `make` *if successful, dcas will be running*
+8. In a *second terminal window*, build dcas-client and test: `make dcas-test`
 
 *NOTE:* The two previous steps will automatically do a test of the dcas client-server model. The make target for dcas automatically start it to test, and the `make dcas-test` will not only build the dcas-client, but it will also run the dcas-client to test against the server. This is why the above instructions specify a second terminal window for the client build/test. After the test, both programs will quit. They will respond to a ^C if you need to quit them.
 
