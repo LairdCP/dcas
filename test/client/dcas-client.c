@@ -13,11 +13,13 @@
 void ExitClean( int ExitVal );
 
 static char * runtime_name = "";
+ssh_session my_ssh_session = NULL;
 
 
 int verify_knownhost(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
+
 	char *hexa;
 	int state;
 	char buf[10];
@@ -46,25 +48,25 @@ int verify_knownhost(ssh_session session)
 	case SSH_SERVER_KNOWN_OK:
 		break; /* ok */
 	case SSH_SERVER_KNOWN_CHANGED:
-		fprintf(stderr,"Host key for server changed : server's one is now :\n");
+		DBGERROR("Host key for server changed : server's one is now :\n");
 		ssh_print_hexa("Public key hash",hash, hlen);
 		ssh_clean_pubkey_hash(&hash);
-		fprintf(stderr,"For security reason, connection will be stopped\n");
+		DBGERROR("For security reason, connection will be stopped\n");
 		return -1;
 	case SSH_SERVER_FOUND_OTHER:
-		fprintf(stderr,"The host key for this server was not found but an other type of key exists.\n");
-		fprintf(stderr,"An attacker might change the default server key to confuse your client"
+		DBGERROR("The host key for this server was not found but an other type of key exists.\n");
+		DBGERROR("An attacker might change the default server key to confuse your client"
 		        "into thinking the key does not exist\n"
 		        "We advise you to rerun the client with -d or -r for more safety.\n");
 		return -1;
 	case SSH_SERVER_FILE_NOT_FOUND:
-		fprintf(stderr,"Could not find known host file. If you accept the host key here,\n");
-		fprintf(stderr,"the file will be automatically created.\n");
+		DBGERROR("Could not find known host file. If you accept the host key here,\n"
+			"the file will be automatically created.\n");
 		/* fallback to SSH_SERVER_NOT_KNOWN behavior */
 	case SSH_SERVER_NOT_KNOWN:
 		hexa = ssh_get_hexa(hash, hlen);
-		fprintf(stderr,"The server is unknown. Do you trust the host key ?\n");
-		fprintf(stderr, "Public key hash: %s\n", hexa);
+		DBGERROR("The server is unknown. Do you trust the host key ?\n"
+			"Public key hash: %s\n", hexa);
 		ssh_string_free_char(hexa);
 		if (fgets(buf, sizeof(buf), stdin) == NULL) {
 			ssh_clean_pubkey_hash(&hash);
@@ -74,7 +76,7 @@ int verify_knownhost(ssh_session session)
 			ssh_clean_pubkey_hash(&hash);
 			return -1;
 		}
-		fprintf(stderr,"This new key will be written on disk for further usage. do you agree ?\n");
+		DBGERROR("This new key will be written on disk for further usage. do you agree ?\n");
 		if (fgets(buf, sizeof(buf), stdin) == NULL) {
 			ssh_clean_pubkey_hash(&hash);
 			return -1;
@@ -99,6 +101,8 @@ int verify_knownhost(ssh_session session)
 
 int show_remote_processes(ssh_session session)
 {
+	REPORT_ENTRY_DEBUG;
+
 	ssh_channel channel;
 	int rc;
 	char buffer[256];
@@ -147,14 +151,25 @@ int main(int argc,char *argv[])
 {
 	REPORT_ENTRY_DEBUG;
 
+	int verbosity = SSH_LOG_PROTOCOL;
+	int rc;
+	unsigned int port = 22;
+	char *user = "root";
+	char password[56];
+	memset(password, 0, 56);
+	strncpy(password, "summit", 56);
+	bool usekey = false;
+
 	// Define the options structure
 	static struct option longopt[] = {
-		{"daemon", no_argument, NULL, 'D'},
-		{"help", no_argument, NULL, 'h'},
-		{"version", no_argument, NULL, 'v'},
+		{"host", required_argument, NULL, 'h'},
+		{"port", required_argument, NULL, 'p'},
+		{"user", required_argument, NULL, 'u'},
+		{"pass", required_argument, NULL, 'P'},
+		{"key", no_argument, NULL, 'k'},
+		{"verbose", no_argument, NULL, 'v'},
 		{NULL, 0, NULL, 0}
 	};
-
 
 #ifdef DEBUG_BUILD
 	// Printout the command-line for debug purposes.
@@ -168,63 +183,78 @@ int main(int argc,char *argv[])
 	DBGDEBUG("%s\n", cmdline);
 #endif
 
-	// Process command-line options
-	runtime_name = argv[0]; // Save if needed later
-	int c;
-	int optidx=0;
-	while ((c=getopt_long(argc,argv,"p:cvh",longopt,&optidx)) != -1) {
-		switch(c) {
-		case 'D':
-			DBGDEBUG("Daemon mode enabled\n");
-			break;
-
-		case 'v':
-			ExitClean(0);
-		case 'h':
-			ExitClean(0);
-			break;
-		}
-	}
-
-	ssh_session my_ssh_session;
-	int verbosity = SSH_LOG_PROTOCOL;
-	int rc;
-	char *password = "summit";
-	char *user = "root";
-
+	// Setup the ssh session first, our opts will adjust some options directly
 	my_ssh_session = ssh_new();
 	if (my_ssh_session == NULL)
 		ExitClean(-1);
 
-	ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, "192.168.0.215");
-	ssh_options_set(my_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
-	if (ssh_options_set(my_ssh_session, SSH_OPTIONS_USER, user) < 0) {
-		ssh_free(my_ssh_session);
+	// Set default
+	ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, "localhost");
+	if (ssh_options_set(my_ssh_session, SSH_OPTIONS_USER, user) < 0)
 		ExitClean(-1);
+
+	// Process command-line options
+	runtime_name = argv[0]; // Save if needed later
+	int c;
+	int optidx=0;
+	while ((c=getopt_long(argc,argv,"h:p:u:P:kv",longopt,&optidx)) != -1) {
+		switch(c) {
+		case 'v':
+			ssh_options_set(my_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
+			break;
+		case 'h':
+			DBGDEBUG( "Setting host: %s\n", optarg );
+			if (ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, optarg) < 0)
+			{
+				DBGERROR("Error setting host: %s\n", ssh_get_error(my_ssh_session));
+				ExitClean(-1);
+			}
+			break;
+		case 'p':
+			port = atoi(optarg);
+			DBGDEBUG( "Setting port: %u\n", port );
+			if (ssh_options_set(my_ssh_session, SSH_OPTIONS_PORT, &port) < 0)
+				ExitClean(-1);
+			break;
+		case 'u':
+			DBGDEBUG( "Setting user: %s\n", optarg );
+			if (ssh_options_set(my_ssh_session, SSH_OPTIONS_USER, optarg) < 0)
+				ExitClean(-1);
+			break;
+		case 'P':
+			strncpy(password, optarg, 55);
+			break;
+		case 'k':
+			DBGDEBUG( "Using auto-key authentication\n");
+			usekey=true;
+			break;
+		}
 	}
 
 	rc = ssh_connect(my_ssh_session);
 	if (rc != SSH_OK) {
-		fprintf(stderr, "Error connecting to localhost: %s\n", ssh_get_error(my_ssh_session));
-		ssh_free(my_ssh_session);
+		DBGERROR("Error connecting to localhost: %s\n", ssh_get_error(my_ssh_session));
 		ExitClean(-1);
 	}
 
 	// Verify the server's identity
 	// For the source code of verify_knowhost(), check previous example
 	if (verify_knownhost(my_ssh_session) < 0) {
-		ssh_disconnect(my_ssh_session);
-		ssh_free(my_ssh_session);
+		DBGERROR("Unable to validate host\n");
 		ExitClean(-1);
 	}
 
 	// Authenticate ourselves
-	rc = ssh_userauth_password(my_ssh_session, NULL, password);
+	if (usekey)
+		// Try automatic key-based auth, we don't support passphrases
+		rc = ssh_userauth_publickey_auto(my_ssh_session, NULL, NULL);
+	else
+		// Default to trying password autentication
+		rc = ssh_userauth_password(my_ssh_session, NULL, password);
+
 	if (rc != SSH_AUTH_SUCCESS) {
-		fprintf(stderr, "Error authenticating with password: %s\n",
-		        ssh_get_error(my_ssh_session));
-		ssh_disconnect(my_ssh_session);
-		ssh_free(my_ssh_session);
+		DBGERROR("Error authenticating: %s\n",
+			ssh_get_error(my_ssh_session));
 		ExitClean(-1);
 	}
 
@@ -232,12 +262,17 @@ int main(int argc,char *argv[])
 
 	show_remote_processes(my_ssh_session);
 
-	ssh_disconnect(my_ssh_session);
-	ssh_free(my_ssh_session);
 	ExitClean(0);
 }
 
 void ExitClean( int ExitVal )
 {
+	if(my_ssh_session != NULL) {
+		if(ssh_is_connected(my_ssh_session))
+			ssh_disconnect(my_ssh_session);
+		ssh_free(my_ssh_session);
+		my_ssh_session = NULL;
+	}
+
 	exit( ExitVal );
 }
