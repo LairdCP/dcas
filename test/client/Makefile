@@ -10,7 +10,7 @@ LDFLAGS =
 LIBS = -lssh
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
-CHECK_ARGS =
+CHECK_ARGS = -h 127.0.0.1 -p 2222 -u libssh -P libssh
 
 CFLAGS += -Wall -Werror --std=c99
 #

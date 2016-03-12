@@ -100,7 +100,7 @@ int verify_knownhost(ssh_session session)
 	return 0;
 }
 
-int show_remote_processes(ssh_session session)
+int remote_hello(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
 
@@ -108,6 +108,7 @@ int show_remote_processes(ssh_session session)
 	int rc;
 	char buffer[256];
 	int nbytes;
+	int nwritten;
 
 	channel = ssh_channel_new(session);
 	if (channel == NULL)
@@ -119,33 +120,38 @@ int show_remote_processes(ssh_session session)
 		return rc;
 	}
 
-	rc = ssh_channel_request_exec(channel, "ps aux");
+	rc = ssh_channel_request_shell(channel);
 	if (rc != SSH_OK) {
 		ssh_channel_close(channel);
 		ssh_channel_free(channel);
 		return rc;
 	}
 
+	nbytes = 6;
+	strncpy(buffer, "HELLO\n", nbytes);
+	nwritten = ssh_channel_write(channel, "HELLO\n", nbytes);
+	if (nwritten != nbytes) return SSH_ERROR;
+
 	nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-	while (nbytes > 0) {
-		if (write(1, buffer, nbytes) != (unsigned int) nbytes) {
-			ssh_channel_close(channel);
-			ssh_channel_free(channel);
-			return SSH_ERROR;
-		}
-		nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-	}
 
 	if (nbytes < 0) {
 		ssh_channel_close(channel);
 		ssh_channel_free(channel);
 		return SSH_ERROR;
+	} else {
+		if(strncmp(buffer,"HELLO\n",5)==0) {
+			DBGINFO("Got proper response from the server\n");
+			rc = SSH_OK;
+		} else {
+			rc = SSH_ERROR;
+			DBGERROR("Got bad response from the server\n");
+		}
 	}
 
 	ssh_channel_send_eof(channel);
 	ssh_channel_close(channel);
 	ssh_channel_free(channel);
-	return SSH_OK;
+	return rc;
 }
 
 int main(int argc,char *argv[])
@@ -259,11 +265,14 @@ int main(int argc,char *argv[])
 		ExitClean(-1);
 	}
 
-	printf("We're IN!\n");
+	DBGINFO("We're IN!\n");
 
-	show_remote_processes(my_ssh_session);
+	rc = remote_hello(my_ssh_session);
 
-	ExitClean(0);
+	if (rc == SSH_OK)
+		ExitClean(0);
+	else
+		ExitClean(-1);
 }
 
 void ExitClean( int ExitVal )
