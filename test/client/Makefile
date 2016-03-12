@@ -7,7 +7,7 @@
 INCLUDES = -I../../src/include
 TARGET  = dcas-client
 LDFLAGS =
-LIBS =
+LIBS = -lssh
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
