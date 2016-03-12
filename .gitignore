@@ -1,4 +1,7 @@
 output/
-src/*.o
-src/*.d
+*.o
+*.d
 dcas
+lib/
+test/client/dcas-client
+*.orig
