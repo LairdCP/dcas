@@ -32,9 +32,17 @@ Quick Start is a misnomer perhaps, because our build system doesn't quite do eve
 
 *NOTE:* The two previous steps will automatically do a test of the dcas client-server model. The make target for dcas automatically start it to test, and the `make dcas-test` will not only build the dcas-client, but it will also run the dcas-client to test against the server. This is why the above instructions specify a second terminal window for the client build/test. After the test, both programs will quit. They will respond to a ^C if you need to quit them.
 
+*BUG:* `make dcas-test` will fail the first time you run it on your system if you haven't previously accepted a host key for 127.0.0.1. It will prompt you to accept and save and then proceed to work. It works, but the validation check fails for some reason. Restart dcas in the other terminal and then rerun `make dcas-test` and it should work.
 
 TODO:
 -----
 
 ### Build system ###
+
 * have Makefile check for cppcheck and ignore the test if not installed
+
+### Tests ###
+
+* Unit tests
+* System test runner
+* Fix first-run `make dcas-test` problem
