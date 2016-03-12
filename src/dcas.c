@@ -19,6 +19,9 @@ static char * runtime_name = "";
 #define SSHD_USER "libssh"
 #define SSHD_PASSWORD "libssh"
 
+#define LAIRD_HELLO "HELLO DCAS"
+#define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
+
 #define KEYS_FOLDER "./test/"
 static int auth_password(const char *user, const char *password)
 {
@@ -175,7 +178,7 @@ int run_sshserver( void )
 		return 1;
 	}
 
-	printf("it works !\n");
+	printf("Client connected!\n");
 	do {
 		i=ssh_channel_read(chan,buf, 2048, 0);
 		if(i>0) {
@@ -183,12 +186,16 @@ int run_sshserver( void )
 				break;
 			if(i == 1 && *buf == '\r')
 				ssh_channel_write(chan, "\r\n", 2);
-			else
-				ssh_channel_write(chan, buf, i);
-			if (write(1,buf,i) < 0) {
-				printf("error writing to buffer\n");
-				return 1;
+			else {
+				buf[i] = '\0'; // be sure it's null terminated
+				DBGINFO("Got from client: %s\n", buf);
+				if (strncmp(buf, LAIRD_HELLO, sizeof(LAIRD_HELLO)) == 0) {
+					DBGINFO("Got good protocol HELLO\n");
+					ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
+					break;
+				}
 			}
+
 		}
 	} while (i>0);
 	ssh_channel_close(chan);

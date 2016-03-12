@@ -100,6 +100,9 @@ int verify_knownhost(ssh_session session)
 	return 0;
 }
 
+#define LAIRD_HELLO "HELLO DCAS"
+#define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
+
 int remote_hello(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
@@ -129,8 +132,8 @@ int remote_hello(ssh_session session)
 
 	nbytes = 6;
 	strncpy(buffer, "HELLO\n", nbytes);
-	nwritten = ssh_channel_write(channel, "HELLO\n", nbytes);
-	if (nwritten != nbytes) return SSH_ERROR;
+	nwritten = ssh_channel_write(channel, LAIRD_HELLO, sizeof(LAIRD_HELLO));
+	if (nwritten != sizeof(LAIRD_HELLO)) return SSH_ERROR;
 
 	nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
 
@@ -139,7 +142,8 @@ int remote_hello(ssh_session session)
 		ssh_channel_free(channel);
 		return SSH_ERROR;
 	} else {
-		if(strncmp(buffer,"HELLO\n",5)==0) {
+		DBGDEBUG("Response: %s\n", buffer);
+		if(strncmp(buffer,LAIRD_RESPONSE,sizeof(LAIRD_RESPONSE))==0) {
 			DBGINFO("Got proper response from the server\n");
 			rc = SSH_OK;
 		} else {
