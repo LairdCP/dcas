@@ -14,7 +14,7 @@ LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUB
 INCLUDES = -Isrc/include
 TARGET  = dcas
 LDFLAGS =
-LIBS =
+LIBS = -lssh
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
 CHECK_ARGS =
