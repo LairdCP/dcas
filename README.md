@@ -33,7 +33,7 @@ Quick Start is a misnomer perhaps, because our build system doesn't quite do eve
 2. Install cmake - this is a tool necessary for building libssh. `sudo apt-get install cmake`
 3. Install OpenSSL - libssh uses this `sudo apt-get install libssl-dev`
 4. Do the build for libssh: `make libssh`
-5. Install libssh - for now our makefiles assume a system-install of libssh, the default puts it into /usr/local/bin so it's not a big deal: `sudo make libssh-install`
+5. Install libssh - for now our makefiles assume a system-install of libssh, the default puts it into /usr/local/bin so it's not a big deal: `sudo make libssh_install`
 6. Build FlatCC - flatcc both provides a build tool and is a library that dcas utilizes. `make flatcc`
 7. After this, you should be able to build dcas: `make` *if successful, dcas will be running*
 8. In a *second terminal window*, build dcas-client and test: `make dcas-test`
