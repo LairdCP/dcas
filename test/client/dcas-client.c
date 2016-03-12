@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <strings.h>
 
 #include <libssh/libssh.h>
 #include <libssh/server.h>
