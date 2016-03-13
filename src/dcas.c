@@ -15,6 +15,7 @@
 #include "../schema/dcal_verifier.h"
 #undef ns
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(DCAL_session, x)
+#include "support/hexdump.h"
 
 void PrintVersion( void );
 void PrintHelp( void );
@@ -224,26 +225,20 @@ int run_sshserver( void )
 	do {
 		i=ssh_channel_read(chan,buf, 2048, 0);
 		if(i>0) {
-			if(*buf == '' || *buf == '')
-				break;
-			if(i == 1 && *buf == '\r')
-				ssh_channel_write(chan, "\r\n", 2);
-			else {
-				buf[i] = '\0'; // be sure it's null terminated
-				DBGINFO("Got %d bytes from client: %s\n", i, buf);
-				if (is_handshake_valid(buf, i)) {
-					DBGINFO("Got good protocol HELLO\n");
-					ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
-					break;
-				}
-				else
-				{
-					DBGINFO("failed to get HELLO\n");
-					ssh_channel_write(chan, LAIRD_BAD_BUFFER, sizeof(LAIRD_BAD_BUFFER));
-					break;
-				}
-			}
+			DBGINFO("Got %d bytes from client:\n", i);
+			hexdump("Buffer:", buf, i, stderr);
 
+			if (is_handshake_valid(buf, i)) {
+				DBGINFO("Got good protocol HELLO\n");
+				ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
+				break;
+			}
+			else
+			{
+				DBGINFO("failed to get HELLO\n");
+				ssh_channel_write(chan, LAIRD_BAD_BUFFER, sizeof(LAIRD_BAD_BUFFER));
+				break;
+			}
 		}
 	} while (i>0);
 

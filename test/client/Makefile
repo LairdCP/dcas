@@ -4,12 +4,12 @@
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES = -I../../src/include
+INCLUDES = -I../../src/include  -I../../lib/flatcc/include
 TARGET  = dcas-client
-LDFLAGS =
-LIBS = -lssh
+LDFLAGS = -L../../lib/flatcc/lib
+LIBS = -lssh -lflatccrt
 
-CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
+CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99
 CHECK_ARGS = -h 127.0.0.1 -p 2222 -u libssh -P libssh
 
 CFLAGS += -Wall -Werror --std=c99
@@ -48,10 +48,12 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 # setup right
 
 %.o: %.cpp
-	$(COMPILE.cpp) -MMD -MP -o $@ $<
+	$(COMPILE.cpp) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
 
 %.o: %.c
-	$(COMPILE.c) -MMD -MP -o $@ $<
+	$(COMPILE.c) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
+
+GENERATED = 	../../schema/dcal_reader.h
 
 .DONE:
 
@@ -61,10 +63,13 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 #
 
 .PHONY: all
-all : static $(TARGET) check
+all : $(GENERATED) static $(TARGET) check
 
 $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
+
+../../schema/dcal_reader.h : ../../schema/dcal.fbs
+	cd ../../schema && ../lib/flatcc/bin/flatcc -ca dcal.fbs
 
 .PHONY: static
 static :

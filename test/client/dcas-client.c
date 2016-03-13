@@ -11,6 +11,14 @@
 
 #include "debug.h"
 
+#include "../../schema/dcal_reader.h"
+#include "../../schema/dcal_builder.h"
+#include "../../schema/dcal_verifier.h"
+#undef ns
+#define ns(x) FLATBUFFERS_WRAP_NAMESPACE(DCAL_session, x)
+
+#include "support/hexdump.h"
+
 void ExitClean( int ExitVal );
 
 static char * runtime_name = "";
@@ -103,6 +111,16 @@ int verify_knownhost(ssh_session session)
 #define LAIRD_HELLO "HELLO DCAS"
 #define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
 
+int build_hello(flatcc_builder_t *B)
+{
+	flatcc_builder_reset(B);
+	ns(Handshake_start_as_root(B));
+	ns(Handshake_magic_add(B, ns(Magic_HELLO)));
+	ns(Handshake_ip_create_str(B, "127.0.0.1"));
+	ns(Handshake_end_as_root(B));
+	return 0;
+}
+
 int remote_hello(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
@@ -110,8 +128,9 @@ int remote_hello(ssh_session session)
 	ssh_channel channel;
 	int rc;
 	char buffer[256];
-	int nbytes;
-	int nwritten;
+	void * handshake_buffer;
+	size_t nbytes;
+	size_t nwritten;
 
 	channel = ssh_channel_new(session);
 	if (channel == NULL)
@@ -130,14 +149,22 @@ int remote_hello(ssh_session session)
 		return rc;
 	}
 
-	nbytes = 6;
-	strncpy(buffer, "HELLO\n", nbytes);
-	nwritten = ssh_channel_write(channel, LAIRD_HELLO, sizeof(LAIRD_HELLO));
-	if (nwritten != sizeof(LAIRD_HELLO)) return SSH_ERROR;
 
-	nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+	flatcc_builder_t builder;
+	flatcc_builder_init(&builder);
+	build_hello(&builder);
+	handshake_buffer = flatcc_builder_get_direct_buffer(&builder, &nbytes);
+	assert(handshake_buffer);
+	DBGDEBUG("Created Handshake buffer size: %zd\n", nbytes);
+	hexdump("Handshake buffer:", handshake_buffer, nbytes, stderr);
 
-	if (nbytes < 0) {
+	nwritten = ssh_channel_write(channel, handshake_buffer, nbytes);
+	if (nwritten != nbytes) return SSH_ERROR;
+
+	int bytes_read;
+	bytes_read = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+
+	if (bytes_read < 0) {
 		ssh_channel_close(channel);
 		ssh_channel_free(channel);
 		return SSH_ERROR;
