@@ -121,6 +121,36 @@ int build_hello(flatcc_builder_t *B)
 	return 0;
 }
 
+int is_handshake_ack_valid(void *buffer, size_t size)
+{
+	ns(Handshake_table_t) handshake;
+	const char * ip;
+	int ret;
+
+	if((ret = ns(Handshake_verify_as_root(buffer, size, ns(Handshake_identifier))))){
+		printf("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
+		return 0;
+	}
+
+	if (!(handshake = ns(Handshake_as_root(buffer)))) {
+		DBGERROR("Not a handshake\n");
+		return 0;
+	}
+
+	if (ns(Handshake_server(handshake)) == false) {
+		DBGERROR("Handshake marked as from client\n");
+		return 0;
+	}
+
+	ip = ns(Handshake_ip(handshake));
+	DBGINFO("Got ip: %s\n", ip);
+
+	if (ns(Handshake_magic(handshake)) == ns(Magic_ACK))
+		return 1;
+
+	return 0;
+}
+
 int remote_hello(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
@@ -149,7 +179,6 @@ int remote_hello(ssh_session session)
 		return rc;
 	}
 
-
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
 	build_hello(&builder);
@@ -169,13 +198,17 @@ int remote_hello(ssh_session session)
 		ssh_channel_free(channel);
 		return SSH_ERROR;
 	} else {
-		DBGDEBUG("Response: %s\n", buffer);
-		if(strncmp(buffer,LAIRD_RESPONSE,sizeof(LAIRD_RESPONSE))==0) {
+		DBGINFO("Response %d bytes from server.\n", bytes_read);
+		hexdump("Buffer:", buffer, bytes_read, stderr);
+
+		if (is_handshake_ack_valid(buffer, bytes_read)) {
 			DBGINFO("Got proper response from the server\n");
 			rc = SSH_OK;
-		} else {
-			rc = SSH_ERROR;
+		}
+		else
+		{
 			DBGERROR("Got bad response from the server\n");
+			rc = SSH_ERROR;
 		}
 	}
 

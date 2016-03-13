@@ -118,6 +118,17 @@ int is_handshake_valid(void *buffer, size_t size)
 	return 0;
 }
 
+int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
+{
+	flatcc_builder_reset(B);
+	ns(Handshake_start_as_root(B));
+	ns(Handshake_server_add(B, true));
+	ns(Handshake_magic_add(B, res_code));
+	ns(Handshake_ip_create_str(B, "192.168.0.1"));
+	ns(Handshake_end_as_root(B));
+	return 0;
+}
+
 int run_sshserver( void )
 {
 	ssh_session session;
@@ -221,24 +232,36 @@ int run_sshserver( void )
 
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
+	void * handshake_buffer;
+	size_t nbytes;
+	size_t nwritten;
 
 	do {
 		i=ssh_channel_read(chan,buf, 2048, 0);
 		if(i>0) {
 			DBGINFO("Got %d bytes from client:\n", i);
-			hexdump("Buffer:", buf, i, stderr);
+			hexdump("Buffer", buf, i, stderr);
+
+			flatcc_builder_t builder;
+			flatcc_builder_init(&builder);
 
 			if (is_handshake_valid(buf, i)) {
 				DBGINFO("Got good protocol HELLO\n");
-				ssh_channel_write(chan, LAIRD_RESPONSE, sizeof(LAIRD_RESPONSE));
-				break;
+				build_handshake_ack(&builder, ns(Magic_ACK));
 			}
 			else
 			{
 				DBGINFO("failed to get HELLO\n");
-				ssh_channel_write(chan, LAIRD_BAD_BUFFER, sizeof(LAIRD_BAD_BUFFER));
-				break;
+				build_handshake_ack(&builder, ns(Magic_NACK));
 			}
+			handshake_buffer = flatcc_builder_get_direct_buffer(&builder, &nbytes);
+			assert(handshake_buffer);
+			DBGDEBUG("Created Handshake buffer size: %zd\n", nbytes);
+			hexdump("Handshake buffer", handshake_buffer, nbytes, stderr);
+
+			nwritten = ssh_channel_write(chan, handshake_buffer, nbytes);
+			if (nwritten != nbytes) return SSH_ERROR;
+
 		}
 	} while (i>0);
 

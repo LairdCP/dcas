@@ -2,7 +2,7 @@
 // Session management data
 namespace DCAL.session;
 
-enum Magic:uint { INVALID = 0, HELLO = 123, ACK = 555 }
+enum Magic:uint { INVALID = 0, HELLO = 123, NACK = 404, ACK = 555 }
 
 table Handshake {
 	server:bool = false;
