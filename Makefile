@@ -11,7 +11,7 @@ LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUB
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES = -Isrc/include -Ilib/flatcc/include
+INCLUDES += -Isrc/include -Ilib/flatcc/include
 TARGET  = dcas
 LDFLAGS = -Llib/flatcc/lib
 LIBS = -lssh -lflatccrt
@@ -38,8 +38,13 @@ else
   CXXFLAGS += -ggdb -fno-inline -DDEBUG_BUILD $(INCLUDES)
 endif
 
-CC = gcc
-CXX = g++
+# if we haven't defined the path to the FLATCC tool, then use the one we
+# hopefully generated. For buildroot, this should be passed in preset, typically:
+#   FLATCC="$(HOST_DIR)/usr/bin/flatcc"
+FLATCC ?= ../lib/flatcc/bin/flatcc
+
+CC ?= gcc
+CXX ?= g++
 
 #
 # Source and object files
@@ -71,13 +76,13 @@ GENERATED = 	schema/dcal_reader.h
 #
 
 .PHONY: all
-all : $(GENERATED) static unit $(TARGET) check
+all : static unit $(TARGET) check
 
-$(TARGET) : debug_msg build_msg $(OBJECTS)
-	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
+$(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
+	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
 schema/dcal_reader.h : schema/dcal.fbs
-	cd schema && ../lib/flatcc/bin/flatcc -ca dcal.fbs
+	cd schema && $(FLATCC) -ca dcal.fbs
 
 
 
@@ -104,7 +109,6 @@ check:
 #
 # Library builds
 #
-.PHONY: libssh
 lib:
 	mkdir -p lib
 
@@ -188,7 +192,7 @@ help:
 ifdef DUMPVARS
 $(foreach v, $(.VARIABLES), $(info $(v) = $($(v))))
 endif
-	
+
 # dependency generation
 ifneq "$(MAKECMDGOALS)" "clean"
   -include $(addsuffix .d,$(basename $(SOURCES)))
