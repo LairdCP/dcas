@@ -42,12 +42,33 @@ Quick Start is a misnomer perhaps, because our build system doesn't quite do eve
 
 *BUG:* `make dcas-test` will fail the first time you run it on your system if you haven't previously accepted a host key for 127.0.0.1. It will prompt you to accept and save and then proceed to work. It works, but the validation check fails for some reason. Restart dcas in the other terminal and then rerun `make dcas-test` and it should work.
 
+Build for WB
+------------
+
+The build isn't integrated into the WB buildroot build system yet. For now, there's a helper makefile script. Note:
+
+* It's designed to build for a WB from the location dcas should be deployed: `wb/buildroot/package/lrd/externals/dcas`
+* It does not build libssh. Buildroot is able to build that, so this assumes that buildroot has built it for the relevant image first.
+* It does build flatcc. It'll deploy flatcc into host tools and libraries into staging in the wb build.
+* The WB buildroot build must be done both before and after running this build. Before to get tools and dependancies taken care of. After to get dcas integrated into the final rootfs image.
+* Repeated builds are bugged, so make clean between each build.
+* Making clean won't remove the build products from the rootfs image however.
+
+To build:
+
+    make -f wb-external.mk clean
+    make -f wb-external.mk WB=wb45n_devel
+
 TODO:
 -----
 
+### DCAS ###
+
+* Proper server architecture, robustness, expandable
+
 ### Build system ###
 
-* have Makefile check for cppcheck and ignore the test if not installed
+* Integrate into buildroot WB buildsystem
 
 ### Tests ###
 
