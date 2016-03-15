@@ -6,11 +6,12 @@
 
 #include "debug.h"
 #include "version.h"
+#include "sdc_sdk.h"
 
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 
-#include "../schema/dcal_reader.h"
+//#include "../schema/dcal_reader.h"
 #include "../schema/dcal_builder.h"
 #include "../schema/dcal_verifier.h"
 #undef ns
@@ -129,6 +130,41 @@ int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
 	return 0;
 }
 
+int build_status(flatcc_builder_t *B)
+{
+	CF10G_STATUS status;
+	SDCERR result;
+	LRD_WF_SSID ssid;
+	memset(&status, 0, sizeof(CF10G_STATUS));
+	result = GetCurrentStatus(&status);
+	if (result!=SDCERR_SUCCESS)
+		DBGERROR("GetCurrentStatus() failed with %d\n", result);
+	result = LRD_WF_GetSSID(&ssid);
+		DBGERROR("LRD_WF_GetSSID() failed with %d\n", result);
+
+// only dealing with client mode for now
+	flatcc_builder_reset(B);
+	ns(Status_start_as_root(B));
+	ns(Status_cardState_add(B, status.cardState));
+	ns(Status_ProfileName_create_str(B, status.configName));
+	ns(Status_ssid_create_str(B, (char *)ssid.val));
+	ns(Status_channel_add(B, status.channel));
+	ns(Status_rssi_add(B, status.rssi));
+	ns(Status_clientName_create_str(B, status.clientName));
+	ns(Status_mac_create_str(B, (char *)status.client_MAC));
+	ns(Status_ip_create_str(B, (char *)status.client_IP));
+	ns(Status_AP_mac_create_str(B, (char *)status.AP_MAC));
+	ns(Status_AP_ip_create_str(B, (char *)status.AP_IP));
+	ns(Status_AP_name_create_str(B, status.APName));
+	ns(Status_bitRate_add(B, status.bitRate));
+	ns(Status_txPower_add(B, status.txPower));
+	ns(Status_dtim_add(B, status.DTIM));
+	ns(Status_beaconPeriod_add(B, status.beaconPeriod));
+
+	ns(Status_end_as_root(B));
+	return 0;
+}
+
 int run_sshserver( void )
 {
 	ssh_session session;
@@ -199,7 +235,7 @@ int run_sshserver( void )
 	} while(!chan);
 
 	if(!chan) {
-		printf("Error: cleint did not ask for a channel session (%s)\n",
+		printf("Error: client did not ask for a channel session (%s)\n",
 		       ssh_get_error(session));
 		ssh_finalize();
 		return 1;
@@ -247,7 +283,8 @@ int run_sshserver( void )
 
 			if (is_handshake_valid(buf, i)) {
 				DBGINFO("Got good protocol HELLO\n");
-				build_handshake_ack(&builder, ns(Magic_ACK));
+	//			build_handshake_ack(&builder, ns(Magic_ACK));
+				build_status(&builder);
 			}
 			else
 			{

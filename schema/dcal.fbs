@@ -10,4 +10,36 @@ table Handshake {
 	ip:string;
 }
 
-root_type DCAL.session.Handshake;
+//root_type DCAL.session.Handshake;
+
+table Status {
+	cardState:uint;
+	ProfileName:string;
+	ssid:string;
+	channel:uint;
+	rssi:int;
+	clientName:string;
+	mac:string;
+	ip:string;
+	ipv6:[string];
+	AP_mac:string;
+	AP_ip:string;
+	AP_name:string;
+	bitRate:uint;
+	txPower:uint;
+	dtim:uint;
+	beaconPeriod:uint;
+}
+
+//root_type Status;
+
+enum Commands:uint { INVALID =0, GETSTATUS =1 }
+
+table Command {
+	command:Commands;
+}
+
+
+//root_type Command;
+
+union Any { Handshake, Command, Status }
