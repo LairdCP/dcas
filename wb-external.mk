@@ -118,7 +118,7 @@ xflatcc_prep_and_patch_flag: lib/xflatcc
 	touch xflatcc_prep_and_patch_flag
 
 lib/xflatcc/lib/libflatcc.a : xflatcc_prep_and_patch_flag
-	cd lib/xflatcc && XTOOLFILE="-DCMAKE_TOOLCHAIN_FILE=$(BASE_DIR)/Toolchain-WB.cmake" ./scripts/build.sh
+	cd lib/xflatcc && HOST_DIR="$(HOST_DIR)" XTOOLFILE="-DCMAKE_TOOLCHAIN_FILE=$(BASE_DIR)/Toolchain-WB.cmake" ./scripts/build.sh
 
 lib/xflatcc : lib
 	cd lib && git clone git@github.com:dvidelabs/flatcc.git xflatcc
