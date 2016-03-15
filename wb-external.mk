@@ -78,7 +78,7 @@ GENERATED = schema/dcal_reader.h
 #
 
 .PHONY: all
-all : lib/flatcc/bin/flatcc lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys
+all : lib/flatcc/bin/flatcc lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys init.d
 
 $(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
@@ -144,6 +144,10 @@ xflatcc-install: $(STAGING_DIR)/usr/lib/libflatccrt.a
 keys:
 	mkdir -p $(TARGET_DIR)/etc/dcas
 	cp -v test/ssh_host_* $(TARGET_DIR)/etc/dcas
+
+init.d:
+	install -D -m 755 support/S99dcas $(TARGET_DIR)/etc/init.d/S99dcas
+	install -D -m 755 support/loop_dcas.sh $(TARGET_DIR)/usr/bin/loop_dcas.sh
 
 #
 # Utility
