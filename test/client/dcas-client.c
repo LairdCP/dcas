@@ -151,6 +151,67 @@ int is_handshake_ack_valid(void *buffer, size_t size)
 	return 0;
 }
 
+const char * cardState_to_string(unsigned int cs)
+{
+	switch(cs)
+	{
+		case 0: return "Not Inserted"; break;
+		case 1: return "Not Associated"; break;
+		case 2: return "Associated"; break;
+		case 3: return "Authenticated"; break;
+		case 4: return "FCC Test"; break;
+		case 5: return "Not Laird"; break;
+		case 6: return "disabled"; break;
+		case 7: return "error"; break;
+		case 8: return "AP Mode"; break;
+		default: return "unknown cardState";
+	}
+}
+
+int dump_status(void *buffer, size_t size)
+{
+	ns(Status_table_t) status;
+	int ret;
+	const unsigned char *string;
+
+	if((ret=ns(Status_verify_as_root(buffer, size, ns(Status_identifier))))){
+		printf("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
+		return 0;
+	}
+
+	if(!(status = ns(Status_as_root(buffer)))){
+		DBGERROR("Buffer is not a status buffer\n");
+		return 0;
+	}
+
+	printf("Card State: %s\n", cardState_to_string(ns(Status_cardState(status))));
+	printf("Profile Name: %s\n", ns(Status_ProfileName(status)));
+	printf("SSID: %s\n", ns(Status_ssid(status)));
+	printf("Channel: %d\n", ns(Status_channel(status)));
+	printf("rssi: %d\n", ns(Status_rssi(status)));
+	printf("Device Name: %s\n", ns(Status_clientName(status)));
+
+	string = (const unsigned char*)ns(Status_mac(status));
+	printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",string[0],string[1],string[2],string[3],string[4],string[5]);
+
+	string = (const unsigned char*)ns(Status_ip(status));
+	printf("IP: %d.%d.%d.%d\n",string[0],string[1],string[2],string[3]);
+	printf("IPv6: (not yet)\n");
+
+	string = (const unsigned char*)ns(Status_AP_mac(status));
+	printf("AP MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",string[0],string[1],string[2],string[3],string[4],string[5]);
+
+	string = (const unsigned char*)ns(Status_AP_ip(status));
+	printf("AP IP: %d.%d.%d.%d\n",string[0],string[1],string[2],string[3]);
+	printf("Bit Rate: %d\n", ns(Status_bitRate(status)));
+	printf("Tx Power: %d\n", ns(Status_txPower(status)));
+	printf("Beacon Period: %d\n", ns(Status_beaconPeriod(status)));
+	printf("DTIM: %d\n", ns(Status_dtim(status)));
+
+
+	return 1;
+}
+
 int remote_hello(ssh_session session)
 {
 	REPORT_ENTRY_DEBUG;
@@ -201,7 +262,7 @@ int remote_hello(ssh_session session)
 		DBGINFO("Response %d bytes from server.\n", bytes_read);
 		hexdump("Buffer:", buffer, bytes_read, stderr);
 
-		if (is_handshake_ack_valid(buffer, bytes_read)) {
+		if (dump_status(buffer, bytes_read)){
 			DBGINFO("Got proper response from the server\n");
 			rc = SSH_OK;
 		}
