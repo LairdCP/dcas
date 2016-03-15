@@ -30,7 +30,10 @@ static char * runtime_name = "";
 #define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
 #define LAIRD_BAD_BUFFER "BAD FLAT BUFFER"
 
-#define KEYS_FOLDER "./test/"
+#define DEFAULT_KEYS_FOLDER "/etc/dcas"
+#define MAX_PATH 128
+static char keys_folder[MAX_PATH];
+
 static int auth_password(const char *user, const char *password)
 {
 	if(strcmp(user, SSHD_USER))
@@ -177,6 +180,7 @@ int run_sshserver( void )
 	int r;
 	int verbosity = 0; // The enums described in the API document don't exist
 	unsigned int port = 2222;
+	char key_tmp[MAX_PATH];
 
 	sshbind=ssh_bind_new();
 	session=ssh_new();
@@ -184,10 +188,12 @@ int run_sshserver( void )
 	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &verbosity);
 	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_BINDPORT, &port);
 
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_DSAKEY,
-	                     KEYS_FOLDER "ssh_host_dsa_key");
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_RSAKEY,
-	                     KEYS_FOLDER "ssh_host_rsa_key");
+	strncpy(key_tmp, keys_folder, MAX_PATH);
+	strncat(key_tmp, "/ssh_host_dsa_key", MAX_PATH);
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
+	strncpy(key_tmp, keys_folder, MAX_PATH);
+	strncat(key_tmp, "/ssh_host_rsa_key", MAX_PATH);
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
 
 	if(ssh_bind_listen(sshbind)<0) {
 		printf("Error listening to socket: %s\n", ssh_get_error(sshbind));
@@ -321,6 +327,7 @@ int main(int argc,char *argv[])
 	// Define the options structure
 	static struct option longopt[] = {
 		{"daemon", no_argument, NULL, 'D'},
+		{"keys", required_argument, NULL, 'k'},
 		{"help", no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'v'},
 		{NULL, 0, NULL, 0}
@@ -338,14 +345,20 @@ int main(int argc,char *argv[])
 	DBGDEBUG("%s\n", cmdline);
 #endif
 
+	strncpy(keys_folder, DEFAULT_KEYS_FOLDER, MAX_PATH-1);
+
 	// Process command-line options
 	runtime_name = argv[0]; // Save if needed later
 	int c;
 	int optidx=0;
-	while ((c=getopt_long(argc,argv,"p:cvh",longopt,&optidx)) != -1) {
+	while ((c=getopt_long(argc,argv,"Dk:hv",longopt,&optidx)) != -1) {
 		switch(c) {
 		case 'D':
 			DBGDEBUG("Daemon mode enabled\n");
+			break;
+		case 'k':
+			DBGDEBUG( "Setting key directory:%s\n", optarg );
+			strncpy(keys_folder, optarg, MAX_PATH-1);
 			break;
 
 		case 'v':

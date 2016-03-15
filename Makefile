@@ -18,7 +18,7 @@ LIBS = -lssh -lflatccrt -lsdc_sdk -lpthread
 
 CPPCHECK := $(shell cppcheck --version 2>/dev/null)
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
-CHECK_ARGS =
+CHECK_ARGS = -k ./test
 
 CFLAGS += -Wall -Werror --std=c99 -D_LRD_VERSION_STRING=\"$(LRD_VERSION)\"
 #
