@@ -11,7 +11,6 @@
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 
-//#include "../schema/dcal_reader.h"
 #include "../schema/dcal_builder.h"
 #include "../schema/dcal_verifier.h"
 #undef ns
@@ -283,7 +282,8 @@ int run_sshserver( void )
 
 			if (is_handshake_valid(buf, i)) {
 				DBGINFO("Got good protocol HELLO\n");
-	//			build_handshake_ack(&builder, ns(Magic_ACK));
+//TODO - deal with handshake for session management
+//			build_handshake_ack(&builder, ns(Magic_ACK));
 				build_status(&builder);
 			}
 			else

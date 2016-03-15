@@ -11,7 +11,6 @@
 
 #include "debug.h"
 
-#include "../../schema/dcal_reader.h"
 #include "../../schema/dcal_builder.h"
 #include "../../schema/dcal_verifier.h"
 #undef ns
