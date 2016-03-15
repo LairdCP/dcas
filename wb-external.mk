@@ -8,9 +8,11 @@ EXTRAVERSION =
 
 LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
 
-HOST_DIR ?= $(CURDIR)/../../../../output/wb50n_devel/host/usr/bin
-STAGING_DIR ?= $(CURDIR)/../../../../output/wb50n_devel/staging
-TARGET_DIR ?= $(CURDIR)/../../../../output/wb50n_devel/target
+WB ?= wb50n_devel
+
+HOST_DIR ?= $(CURDIR)/../../../../output/$(WB)/host/usr/bin
+STAGING_DIR ?= $(CURDIR)/../../../../output/$(WB)/staging
+TARGET_DIR ?= $(CURDIR)/../../../../output/$(WB)/target
 BASE_DIR := $(CURDIR)
 
 #
@@ -76,7 +78,7 @@ GENERATED = schema/dcal_reader.h
 #
 
 .PHONY: all
-all : lib/flatcc/bin/flatcc lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET)
+all : lib/flatcc/bin/flatcc lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys
 
 $(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
@@ -86,6 +88,9 @@ $(TARGET_DIR)/usr/bin/$(TARGET) : $(TARGET)
 
 schema/dcal_reader.h: schema/dcal.fbs
 	cd schema && $(FLATCC) -ca dcal.fbs
+
+.PHONY: $(TARGET)-install
+$(TARGET)-install: $(TARGET_DIR)/usr/bin/$(TARGET)
 
 lib:
 	mkdir -p lib
@@ -124,14 +129,21 @@ lib/xflatcc : lib
 	cd lib && git clone git@github.com:dvidelabs/flatcc.git xflatcc
 
 $(STAGING_DIR)/usr/lib/libflatccrt.a: lib/xflatcc/lib/libflatccrt.a
-	cp lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatcc.a
-	cp lib/xflatcc/lib/libflatccrt.a $(STAGING_DIR)/usr/lib/libflatccrt.a
+	cp -v lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatcc.a
+	cp -v lib/xflatcc/lib/libflatccrt.a $(STAGING_DIR)/usr/lib/libflatccrt.a
 
 .PHONY: xflatcc
 xflatcc: lib/xflatcc/lib/libflatcc.a
 
 .PHONY: xflatcc-install
 xflatcc-install: $(STAGING_DIR)/usr/lib/libflatccrt.a
+
+#
+# Support files
+#
+keys:
+	mkdir -p $(TARGET_DIR)/etc/dcas
+	cp -v test/ssh_host_* $(TARGET_DIR)/etc/dcas
 
 #
 # Utility
