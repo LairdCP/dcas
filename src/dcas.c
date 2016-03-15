@@ -372,11 +372,14 @@ int main(int argc,char *argv[])
 		}
 	}
 
-	rc = run_sshserver();
-	DBGDEBUG("Got %d return from run_sshserver()\n", rc);
+	do {
+		rc = run_sshserver();
+		DBGDEBUG("Got %d return from run_sshserver()\n", rc);
+	} while(rc == 0);
 
-	printf("Hello world\n");
-	ExitClean(0);
+	DBGDEBUG("DCAS Exiting\n");
+
+	ExitClean(rc);
 }
 
 void PrintVersion( void )
