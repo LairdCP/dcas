@@ -132,6 +132,10 @@ int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
 	return 0;
 }
 
+#define MAC_SZ 6
+#define IP4_SZ 4
+#define IP6_SZ 8
+
 int build_status(flatcc_builder_t *B)
 {
 	CF10G_STATUS status;
@@ -153,10 +157,10 @@ int build_status(flatcc_builder_t *B)
 	ns(Status_channel_add(B, status.channel));
 	ns(Status_rssi_add(B, status.rssi));
 	ns(Status_clientName_create_str(B, status.clientName));
-	ns(Status_mac_create_str(B, (char *)status.client_MAC));
-	ns(Status_ip_create_str(B, (char *)status.client_IP));
-	ns(Status_AP_mac_create_str(B, (char *)status.AP_MAC));
-	ns(Status_AP_ip_create_str(B, (char *)status.AP_IP));
+	ns(Status_mac_create(B, (char *)status.client_MAC, MAC_SZ));
+	ns(Status_ip_create(B, (char *)status.client_IP, IP4_SZ));
+	ns(Status_AP_mac_create(B, (char *)status.AP_MAC, MAC_SZ));
+	ns(Status_AP_ip_create(B, (char *)status.AP_IP, IP4_SZ));
 	ns(Status_AP_name_create_str(B, status.APName));
 	ns(Status_bitRate_add(B, status.bitRate));
 	ns(Status_txPower_add(B, status.txPower));
