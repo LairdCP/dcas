@@ -1,0 +1,304 @@
+#include <stdio.h>
+#include <stdbool.h>
+#include <semaphore.h>
+#include <errno.h>
+#define __USE_POSIX199309
+#include <time.h>
+
+#include "debug.h"
+#include "ssh_server.h"
+#include "buffer.h"
+
+#include <libssh/libssh.h>
+#include <libssh/server.h>
+#include <libssh/callbacks.h>
+
+#define SSHD_USER "libssh"
+#define SSHD_PASSWORD "libssh"
+
+static sem_t thread_init; // used between dispatcher and thread to know when safe to reuse dispatcher's stack variable
+
+struct DISPATCH_DATA {
+	ssh_session session;
+	bool *alive;
+	pthread_mutex_t sdk_lock;
+};
+
+static int auth_password(const char *user, const char *password)
+{
+	if(strcmp(user, SSHD_USER))
+		return 0;
+	if(strcmp(password, SSHD_PASSWORD))
+		return 0;
+	return 1; // authenticated
+}
+
+static int authenticate(ssh_session session)
+{
+	ssh_message message;
+
+	do {
+		message=ssh_message_get(session);
+		if(!message)
+			break;
+		switch(ssh_message_type(message)) {
+		case SSH_REQUEST_AUTH:
+			switch(ssh_message_subtype(message)) {
+			case SSH_AUTH_METHOD_PASSWORD:
+				DBGINFO("User %s wants to auth with pass %s\n",
+				       ssh_message_auth_user(message),
+				       ssh_message_auth_password(message));
+				if(auth_password(ssh_message_auth_user(message),
+				                 ssh_message_auth_password(message))) {
+					ssh_message_auth_reply_success(message,0);
+					ssh_message_free(message);
+					return 1;
+				}
+				ssh_message_auth_set_methods(message,
+				                             SSH_AUTH_METHOD_PASSWORD |
+				                             SSH_AUTH_METHOD_INTERACTIVE);
+				// not authenticated, send default message
+				ssh_message_reply_default(message);
+				break;
+			case SSH_AUTH_METHOD_NONE:
+			default:
+				DBGINFO("User %s wants to auth with unknown auth %d\n",
+				       ssh_message_auth_user(message),
+				       ssh_message_subtype(message));
+				ssh_message_auth_set_methods(message,
+				                             SSH_AUTH_METHOD_PASSWORD);
+				ssh_message_reply_default(message);
+				break;
+			}
+			break;
+		default:
+			ssh_message_auth_set_methods(message,
+			                             SSH_AUTH_METHOD_PASSWORD);
+			ssh_message_reply_default(message);
+		}
+		ssh_message_free(message);
+	} while (1);
+	return 0;
+}
+
+void * ssh_session_thread( void *param )
+{
+	ssh_message message;
+	ssh_channel chan=0;
+	char buf[BUFSIZE];
+	int auth=0;
+	int shell=0;
+	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
+	bool *alive;
+	ssh_session session;
+	size_t nwritten;
+	int nbytes;
+
+	alive = dispatch_data->alive;     //read only. Only set by dispatch or signal catch
+	session = dispatch_data->session; //we will be responsible for session now
+	dispatch_data->session = NULL;    //ensure no other thread points to this one.
+	sem_post(&thread_init);           // let dispatch thread know we've copied the pointers from it's stack data
+
+	if (ssh_handle_key_exchange(session)) {
+		DBGERROR("ssh_handle_key_exchange: %s\n", ssh_get_error(session));
+		ssh_free(session);
+		return NULL;
+	}
+
+	/* proceed to authentication */
+	auth = authenticate(session);
+	if(!auth) {
+		DBGERROR("Authentication error: %s\n", ssh_get_error(session));
+		ssh_disconnect(session);
+		ssh_free(session);
+		return NULL;
+	}
+
+	DBGINFO("**** Successful connection\n");
+	/* wait for a channel session */
+	do {
+		message = ssh_message_get(session);
+		if(message) {
+			if(ssh_message_type(message) == SSH_REQUEST_CHANNEL_OPEN &&
+			    ssh_message_subtype(message) == SSH_CHANNEL_SESSION) {
+				chan = ssh_message_channel_request_open_reply_accept(message);
+				ssh_message_free(message);
+				break;
+			} else {
+				ssh_message_reply_default(message);
+				ssh_message_free(message);
+			}
+		} else {
+			break;
+		}
+	} while(!chan && *alive);
+
+	if(!*alive) {
+		DBGINFO("Alive indicator has been disabled\n");
+		goto exit_channel;
+	}
+
+	if(!chan) {
+		DBGERROR("Error: client did not ask for a channel session (%s)\n",
+		       ssh_get_error(session));
+		goto exit_disconnect;
+	}
+
+	/* wait for a shell */
+	do {
+		message = ssh_message_get(session);
+		if(message != NULL) {
+			if(ssh_message_type(message) == SSH_REQUEST_CHANNEL &&
+			    ssh_message_subtype(message) == SSH_CHANNEL_REQUEST_SHELL) {
+				shell = 1;
+				ssh_message_channel_request_reply_success(message);
+				ssh_message_free(message);
+				break;
+			}
+			ssh_message_reply_default(message);
+			ssh_message_free(message);
+		} else {
+			break;
+		}
+	} while(!shell && *alive);
+
+	if(!*alive) {
+		DBGINFO("Alive indicator has been disabled\n");
+		goto exit_channel;
+	}
+
+	if(!shell) {
+		DBGERROR("Error: No shell requested (%s)\n", ssh_get_error(session));
+		goto exit_channel;
+	}
+
+	DBGDEBUG("Client connected!\n");
+
+	do {
+		nbytes=ssh_channel_read(chan,buf, BUFSIZE, 0);
+		if(nbytes>0) {
+			DBGINFO("Got %d bytes from client:\n", nbytes);
+
+			nbytes = processbuff(buf, nbytes, &dispatch_data->sdk_lock);
+
+			if (nbytes<0){
+				DBGERROR("error in processbuf(): %d\n", nbytes);
+				goto exit_channel;
+			}
+			if (nbytes==0){
+				DBGINFO("no command received - no outbound buffer\n");//no-op
+			}
+			else{
+				nwritten = ssh_channel_write(chan, buf, nbytes);
+				if (nwritten != nbytes){
+					DBGERROR("Failure to send buffer\n");
+					goto exit_channel;
+				}
+			}
+		}
+		if ((nbytes==SSH_AGAIN) && (*alive))
+			continue;
+	} while ((nbytes>0) && (*alive));
+
+	DBGDEBUG("Read thread exiting due to EOF on channel\n");
+
+exit_channel:
+	if (chan)
+		ssh_channel_close(chan);
+exit_disconnect:
+	ssh_disconnect(session);
+	ssh_free(session);
+	session = NULL;
+	return NULL;
+}
+
+int check_with_timeout( int return_value, int test_value,
+                        int * remaining, struct timespec *sleep_time)
+{
+	if ((return_value==0)                  //worked
+	     || (*remaining==0)                //time has expired
+	     || (test_value != return_value))  //error other then what we are testing for
+		return 0;
+
+	(*remaining)--;
+	nanosleep(sleep_time, NULL);
+	return 1;
+}
+
+int run_sshserver( struct SSH_DATA *ssh_data )
+{
+	ssh_bind sshbind;
+	int i,r;
+	char key_tmp[MAX_PATH];
+	pthread_t child;
+	struct timespec sleep_duration;
+	struct DISPATCH_DATA dispatch_data;
+
+	i = 10;
+	sleep_duration.tv_sec =0;
+	sleep_duration.tv_nsec = 10000000; // 10 ms
+
+	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.sdk_lock,NULL),
+	                           EAGAIN, &i, &sleep_duration));
+	if (r)
+	{
+		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
+		return 1;
+	}
+
+	ssh_threads_set_callbacks(ssh_threads_get_pthread());
+	ssh_init();
+
+	sshbind=ssh_bind_new();
+	dispatch_data.alive = &ssh_data->alive;
+
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
+
+	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
+	strncat(key_tmp, "/ssh_host_dsa_key", MAX_PATH);
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
+	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
+	strncat(key_tmp, "/ssh_host_rsa_key", MAX_PATH);
+	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
+
+	if(ssh_bind_listen(sshbind)<0) {
+		DBGERROR("Error listening to socket: %s\n", ssh_get_error(sshbind));
+		r = 1;
+		goto cleanup;
+	}
+	DBGINFO("Started DCAS on port %d\n", ssh_data->port);
+
+	while (ssh_data->alive)
+	{
+		dispatch_data.session = ssh_new();
+		r = ssh_bind_accept(sshbind, dispatch_data.session);
+
+		if(r==SSH_ERROR) {
+			//TODO - determine if we should stay running or exit the application
+			DBGERROR("Error accepting a connection: %s\n", ssh_get_error(sshbind));
+			ssh_free(dispatch_data.session);
+			dispatch_data.session = NULL;
+			continue;
+		}
+		i = 10;
+		while (check_with_timeout (r=pthread_create(&child, NULL,
+		                                            &ssh_session_thread, &dispatch_data),
+		                            EAGAIN, &i, &sleep_duration));
+		if (r) {
+			DBGERROR("Unable to start child thread: %s\n", strerror(r));
+			ssh_data->alive = false; // kill any children
+			ssh_free(dispatch_data.session);
+			r=1;
+			break; // abort while loop
+		}
+		sem_wait(&thread_init); // wait for child to copy data from stack
+	}
+
+cleanup:
+	ssh_bind_free(sshbind);
+	ssh_finalize();
+	pthread_mutex_destroy(&(dispatch_data.sdk_lock));
+
+	return r;
+}

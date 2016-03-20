@@ -18,10 +18,10 @@ BASE_DIR := $(CURDIR)
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES += -I$(STAGING_DIR)/usr/include -Isrc/include -Ilib/flatcc/include
+INCLUDES += -I$(STAGING_DIR)/usr/include -Isrc/include -Ilib/flatcc/include -Ischema
 TARGET  = dcas
 LDFLAGS = -L$(STAGING_DIR) -L$(STAGING_DIR)/lib -L$(STAGING_DIR)/usr/lib
-LIBS = -lc -lssh -lflatccrt -lsdc_sdk
+LIBS = -lc -lssh -lssh_threads -lflatccrt -lsdc_sdk -lpthread
 
 CFLAGS += -Wall --std=c99 -D_LRD_VERSION_STRING=\"$(LRD_VERSION)\"
 #
