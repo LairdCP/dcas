@@ -11,10 +11,10 @@ LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUB
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES += -Isrc/include -Ilib/flatcc/include
+INCLUDES += -Isrc/include -Ilib/flatcc/include -Ischema/
 TARGET  = dcas
 LDFLAGS = -Llib/flatcc/lib
-LIBS = -lssh -lflatccrt -lsdc_sdk -lpthread
+LIBS = -lssh -lssh_threads -lflatccrt -lsdc_sdk -lpthread
 
 CPPCHECK := $(shell cppcheck --version 2>/dev/null)
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99 $(INCLUDES)
