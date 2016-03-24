@@ -1,7 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <semaphore.h>
 #include <errno.h>
+#include <assert.h>
 #define __USE_POSIX199309
 #include <time.h>
 
@@ -16,13 +18,71 @@
 #define SSHD_USER "libssh"
 #define SSHD_PASSWORD "libssh"
 
-static sem_t thread_init; // used between dispatcher and thread to know when safe to reuse dispatcher's stack variable
+typedef struct LIST_T {
+	void * data;
+	struct LIST_T * next;
+} list_t;
+
+// completed thread structure
+struct THREAD_LIST{
+	list_t *head;
+	pthread_mutex_t lock;
+};
 
 struct DISPATCH_DATA {
 	ssh_session session;
 	bool *alive;
 	pthread_mutex_t sdk_lock;
+	sem_t thread_init; // used between dispatcher and thread to know when
+	                   // safe to reuse dispatcher's stack variable
+	sem_t *thread_list;// used to limit total active threads
+	struct THREAD_LIST completed;
 };
+
+// when a thread completes, it calls this routine so that it's thread ID
+// can be queued.  At a later point, the list will be emptied and the
+// thread's resources will be recovered by a pthread_join() call
+void add_thread_to_completed_list( struct THREAD_LIST *completed, void * data)
+{
+	pthread_mutex_lock(&completed->lock);
+	list_t * curr = completed->head;
+	list_t * last = NULL;
+	while(curr) {
+		last = curr;
+		curr = curr->next;
+	}
+	curr = (list_t *)malloc(sizeof(list_t));
+	curr->data = data;
+	curr->next = NULL;
+
+	if (!completed->head)
+		completed->head = curr;
+	else
+		last->next = curr;
+
+	pthread_mutex_unlock(&completed->lock);
+}
+
+// This is called from the dispatch routine of the main thread which
+// could be blocked waiting for a connection when a thread ends.  This
+// allows us to clean up threads that have completed at a later time.
+void empty_completed_thread_list( struct THREAD_LIST *completed)
+{
+	assert(completed);
+	pthread_mutex_lock(&completed->lock);
+	list_t * curr = completed->head;
+	list_t * next = NULL;
+	while (curr) {
+		DBGDEBUG("joining thread 0x%x\n", *(int*)curr->data);
+		pthread_join( *(pthread_t *)curr->data, NULL );
+		DBGDEBUG("Join complete\n");
+		next = curr->next;
+		free(curr);
+		curr=next;
+	}
+	completed->head = NULL;
+	pthread_mutex_unlock(&completed->lock);
+}
 
 static int auth_password(const char *user, const char *password)
 {
@@ -96,22 +156,21 @@ void * ssh_session_thread( void *param )
 
 	alive = dispatch_data->alive;     //read only. Only set by dispatch or signal catch
 	session = dispatch_data->session; //we will be responsible for session now
-	dispatch_data->session = NULL;    //ensure no other thread points to this one.
-	sem_post(&thread_init);           // let dispatch thread know we've copied the pointers from it's stack data
+	dispatch_data->session = NULL;    //ensure no other thread points to this
+	sem_post(&dispatch_data->thread_init);  // signal dispatch routine thread
+	                                        // that we've copied the pointer
+	                                        // from it's stack data
 
 	if (ssh_handle_key_exchange(session)) {
-		DBGERROR("ssh_handle_key_exchange: %s\n", ssh_get_error(session));
-		ssh_free(session);
-		return NULL;
+		DBGERROR("ssh_void handle_key_exchange: %s\n", ssh_get_error(session));
+		goto exit_session;
 	}
 
 	/* proceed to authentication */
 	auth = authenticate(session);
 	if(!auth) {
 		DBGERROR("Authentication error: %s\n", ssh_get_error(session));
-		ssh_disconnect(session);
-		ssh_free(session);
-		return NULL;
+		goto exit_disconnect;
 	}
 
 	DBGINFO("**** Successful connection\n");
@@ -207,8 +266,15 @@ exit_channel:
 		ssh_channel_close(chan);
 exit_disconnect:
 	ssh_disconnect(session);
+exit_session:
 	ssh_free(session);
 	session = NULL;
+
+	DBGDEBUG("adding 0x%x to completed list\n",(int)pthread_self());
+	add_thread_to_completed_list( &dispatch_data->completed,
+	                              (void *) pthread_self());
+	sem_post(dispatch_data->thread_list);
+	DBGDEBUG("thread exiting\n");
 	return NULL;
 }
 
@@ -246,11 +312,23 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 		return 1;
 	}
 
+	i=10;
+	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.completed.lock,NULL),
+	                           EAGAIN, &i, &sleep_duration));
+	if (r)
+	{
+		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
+		return 1;
+	}
+
+	dispatch_data.alive = &ssh_data->alive;
+	dispatch_data.thread_list = &ssh_data->thread_list;
+	dispatch_data.completed.head = NULL;
+
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
 
 	sshbind=ssh_bind_new();
-	dispatch_data.alive = &ssh_data->alive;
 
 	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
 	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
@@ -271,6 +349,14 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 	while (ssh_data->alive)
 	{
+		sem_wait(dispatch_data.thread_list); // this semaphore is initialized
+		                                     // to MAX_THREADS and ensures that
+		                                     // we adhere to that limit
+		if (!ssh_data->alive)
+			break;
+
+		empty_completed_thread_list(&dispatch_data.completed);
+
 		dispatch_data.session = ssh_new();
 		r = ssh_bind_accept(sshbind, dispatch_data.session);
 
@@ -292,13 +378,16 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 			r=1;
 			break; // abort while loop
 		}
-		sem_wait(&thread_init); // wait for child to copy data from stack
+		sem_wait(&dispatch_data.thread_init); // wait for child to copy data from stack
 	}
+
+	empty_completed_thread_list(&dispatch_data.completed);
 
 cleanup:
 	ssh_bind_free(sshbind);
 	ssh_finalize();
 	pthread_mutex_destroy(&(dispatch_data.sdk_lock));
+	pthread_mutex_destroy(&dispatch_data.completed.lock);
 
 	return r;
 }

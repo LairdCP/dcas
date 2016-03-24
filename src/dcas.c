@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <unistd.h> //only needed for sleep prior to exit
 
 #include "debug.h"
 #include "version.h"
@@ -28,6 +29,7 @@ void sigproc(int unused)
 {
 	DBGINFO("signal caught. Marking loop and threads for exit\n");
 	ssh_data.alive = false;
+	sem_post(&ssh_data.thread_list);
 }
 
 int main(int argc,char *argv[])
@@ -93,11 +95,16 @@ int main(int argc,char *argv[])
 		}
 	}
 
+	sem_init(&ssh_data.thread_list, 0, MAX_THREADS);
+
 	rc = run_sshserver( &ssh_data );
 	DBGDEBUG("Got %d return from run_sshserver()\n", rc);
 
+	sleep(1); // allow thread(s) to exit - only need to do this to be able to
+	          // check memory usage with valgrind to avoid false positives
 	DBGDEBUG("DCAS Exiting\n");
 
+	sem_destroy(&ssh_data.thread_list);
 	ExitClean( rc );
 }
 
@@ -116,10 +123,10 @@ void PrintHelp( void )
 	       "\tUsage:\n"
 	       "\t%s [-Dkvhp]\n\n"
 	       "\t\t-D\t\tDaemon mode\n"
-	       "\t\t-k:<path>\tkey directory path\n"
+	       "\t\t-k <path>\tkey directory path\n"
 	       "\t\t-v\t\tversion\n"
 	       "\t\t-h\t\thelp\n"
-	       "\t\t-p:<port>\ttcp port to listen for connections\n"
+	       "\t\t-p <port>\ttcp port to listen for connections\n"
 	       "\n\n", runtime_name);
 }
 
