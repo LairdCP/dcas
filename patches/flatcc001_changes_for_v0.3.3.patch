@@ -1,0 +1,25 @@
+diff --git a/external/hash/initbuild.sh b/external/hash/initbuild.sh
+index 91117a6..cb1fc0b 100755
+--- external/hash/initbuild.sh
++++ external/hash/initbuild.sh
+@@ -2,4 +2,4 @@
+ 
+ cd `dirname $0`
+ mkdir -p "build"
+-cd build && cmake -GNinja .. && ninja
++cd build && cmake ${XTOOLFILE} .. && make
+diff --git a/scripts/initbuild.sh b/scripts/initbuild.sh
+index c5af605..5bbfd55 100755
+--- scripts/initbuild.sh
++++ scripts/initbuild.sh
+@@ -36,5 +36,5 @@ mkdir -p ${ROOT}/build/Release
+ rm -rf ${ROOT}/build/Debug/*
+ rm -rf ${ROOT}/build/Debug/*
+ 
+-cd ${ROOT}/build/Debug && cmake -G "$FLATCC_BUILD_GEN" ../.. -DCMAKE_BUILD_TYPE=Debug
+-cd ${ROOT}/build/Release && cmake -G "$FLATCC_BUILD_GEN" ../.. -DCMAKE_BUILD_TYPE=Release
++cd ${ROOT}/build/Debug && cmake -G "$FLATCC_BUILD_GEN" ../.. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_BUILD_TYPE=Debug -DFLATCC_TEST=OFF ${XTOOLFILE}
++cd ${ROOT}/build/Release && cmake -G "$FLATCC_BUILD_GEN" ../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_BUILD_TYPE=Release -DFLATCC_TEST=OFF ${XTOOLFILE}
+-- 
+2.6.0.GIT
+

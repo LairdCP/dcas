@@ -26,7 +26,7 @@ int is_handshake_valid(void *buffer, size_t size)
 	const char * ip;
 	int ret;
 
-	if((ret = ns(Handshake_verify_as_root(buffer, size, ns(Handshake_identifier))))){
+	if((ret = ns(Handshake_verify_as_root(buffer, size)))){
 		DBGERROR("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
 		return 0;
 	}

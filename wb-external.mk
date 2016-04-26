@@ -100,8 +100,7 @@ lib:
 # FlatCC local
 #
 flatcc_prep_and_patch_flag: lib/flatcc
-	cd lib/flatcc && git checkout v0.2.0
-	cd lib/flatcc && patch -p0 < ../../patches/flatcc001_ninja-to-make.patch
+	cd lib/flatcc && git checkout v0.3.3
 	touch flatcc_prep_and_patch_flag
 
 lib/flatcc/bin/flatcc : flatcc_prep_and_patch_flag
@@ -117,9 +116,8 @@ flatcc: lib/flatcc/bin/flatcc
 # Cross-compiles flatcc
 #
 xflatcc_prep_and_patch_flag: lib/xflatcc
-	cd lib/xflatcc && git checkout v0.2.0
-	cd lib/xflatcc && patch -p0 < ../../patches/flatcc001_ninja-to-make.patch
-	cd lib/xflatcc && patch -p0 < ../../patches/flatcc002_unaligned.patch
+	cd lib/xflatcc && git checkout v0.3.3
+	cd lib/xflatcc && patch -p0 < ../../patches/flatcc001_changes_for_v0.3.3.patch
 	touch xflatcc_prep_and_patch_flag
 
 lib/xflatcc/lib/libflatcc.a : xflatcc_prep_and_patch_flag
