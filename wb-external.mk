@@ -43,7 +43,7 @@ endif
 # if we haven't defined the path to the FLATCC tool, then use the one we
 # hopefully generated. For buildroot, this should be passed in preset, typically:
 #   FLATCC="$(HOST_DIR)/usr/bin/flatcc"
-FLATCC ?= ../lib/flatcc/bin/flatcc
+FLATCC ?= ../lib.local/flatcc/bin/flatcc
 
 CC := $(HOST_DIR)/arm-laird-linux-gnueabi-gcc
 CXX := $(HOST_DIR)/arm-laird-linux-gnueabi-g++
@@ -78,7 +78,7 @@ GENERATED = schema/dcal_reader.h
 #
 
 .PHONY: all
-all : lib/flatcc/bin/flatcc lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys init.d
+all : lib.local/flatcc/bin/flatcc lib.local/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys init.d
 
 $(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
@@ -93,45 +93,45 @@ schema/dcal_reader.h: schema/dcal.fbs
 $(TARGET)-install: $(TARGET_DIR)/usr/bin/$(TARGET)
 
 lib:
-	mkdir -p lib
+	mkdir -p lib.local
 
 
 #
 # FlatCC local
 #
-flatcc_prep_and_patch_flag: lib/flatcc
-	cd lib/flatcc && git checkout v0.3.3
+flatcc_prep_and_patch_flag: lib.local/flatcc
+	cd lib.local/flatcc && git checkout v0.3.3
 	touch flatcc_prep_and_patch_flag
 
-lib/flatcc/bin/flatcc : flatcc_prep_and_patch_flag
-	cd lib/flatcc && ./scripts/build.sh
+lib.local/flatcc/bin/flatcc : flatcc_prep_and_patch_flag
+	cd lib.local/flatcc && ./scripts/build.sh
 
-lib/flatcc : lib
-	cd lib && git clone git@github.com:dvidelabs/flatcc.git
+lib.local/flatcc : lib
+	cd lib.local && git clone git@github.com:dvidelabs/flatcc.git
 
 .PHONY: flatcc
-flatcc: lib/flatcc/bin/flatcc
+flatcc: lib.local/flatcc/bin/flatcc
 
 #
 # Cross-compiles flatcc
 #
-xflatcc_prep_and_patch_flag: lib/xflatcc
-	cd lib/xflatcc && git checkout v0.3.3
-	cd lib/xflatcc && patch -p0 < ../../patches/flatcc001_changes_for_v0.3.3.patch
+xflatcc_prep_and_patch_flag: lib.local/xflatcc
+	cd lib.local/xflatcc && git checkout v0.3.3
+	cd lib.local/xflatcc && patch -p0 < ../../patches/flatcc001_changes_for_v0.3.3.patch
 	touch xflatcc_prep_and_patch_flag
 
-lib/xflatcc/lib/libflatcc.a : xflatcc_prep_and_patch_flag
-	cd lib/xflatcc && HOST_DIR="$(HOST_DIR)" XTOOLFILE="-DCMAKE_TOOLCHAIN_FILE=$(BASE_DIR)/Toolchain-WB.cmake" ./scripts/build.sh
+lib.local/xflatcc/lib/libflatcc.a : xflatcc_prep_and_patch_flag
+	cd lib.local/xflatcc && HOST_DIR="$(HOST_DIR)" XTOOLFILE="-DCMAKE_TOOLCHAIN_FILE=$(BASE_DIR)/Toolchain-WB.cmake" ./scripts/build.sh
 
-lib/xflatcc : lib
-	cd lib && git clone git@github.com:dvidelabs/flatcc.git xflatcc
+lib.local/xflatcc : lib
+	cd lib.local && git clone git@github.com:dvidelabs/flatcc.git xflatcc
 
-$(STAGING_DIR)/usr/lib/libflatccrt.a: lib/xflatcc/lib/libflatccrt.a
-	cp -v lib/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatcc.a
-	cp -v lib/xflatcc/lib/libflatccrt.a $(STAGING_DIR)/usr/lib/libflatccrt.a
+$(STAGING_DIR)/usr/lib/libflatccrt.a: lib.local/xflatcc/lib/libflatccrt.a
+	cp -v lib.local/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatcc.a
+	cp -v lib.local/xflatcc/lib/libflatccrt.a $(STAGING_DIR)/usr/lib/libflatccrt.a
 
 .PHONY: xflatcc
-xflatcc: lib/xflatcc/lib/libflatcc.a
+xflatcc: lib.local/xflatcc/lib/libflatcc.a
 
 .PHONY: xflatcc-install
 xflatcc-install: $(STAGING_DIR)/usr/lib/libflatccrt.a
@@ -157,7 +157,7 @@ clean :
 	-rm -f $(DEPENDS)
 	-rm -f $(TARGET)
 	-rm -f schema/*.h
-	-rm -rf lib
+	-rm -rf lib.local
 	-rm -f xflatcc_prep_and_patch_flag
 	-rm -f flatcc_prep_and_patch_flag
 
