@@ -126,7 +126,7 @@ int is_handshake_ack_valid(void *buffer, size_t size)
 	const char * ip;
 	int ret;
 
-	if((ret = ns(Handshake_verify_as_root(buffer, size)))){
+	if((ret = ns(Handshake_verify_as_root(buffer, size, ns(Handshake_identifier))))){
 		printf("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
 		return 0;
 	}
@@ -173,7 +173,7 @@ int dump_status(void *buffer, size_t size)
 	int ret;
 	const unsigned char *string;
 
-	if((ret=ns(Status_verify_as_root(buffer, size)))){
+	if((ret=ns(Status_verify_as_root(buffer, size, ns(Status_identifier))))){
 		printf("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
 		return 0;
 	}

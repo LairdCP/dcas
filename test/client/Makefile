@@ -4,9 +4,9 @@
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES = -I../../src/include  -I../../lib.local/flatcc/include
+INCLUDES = -I../../src/include  -I../../lib/flatcc/include
 TARGET  = dcas-client
-LDFLAGS = -L../../lib.local/flatcc/lib
+LDFLAGS = -L../../lib/flatcc/lib
 LIBS = -lssh -lflatccrt
 
 CPPCHECK_FLAGS = --enable=all --suppress=missingIncludeSystem --std=c99
@@ -69,7 +69,7 @@ $(TARGET) : debug_msg build_msg $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
 ../../schema/dcal_reader.h : ../../schema/dcal.fbs
-	cd ../../schema && ../lib.local/flatcc/bin/flatcc -ca dcal.fbs
+	cd ../../schema && ../lib/flatcc/bin/flatcc -ca dcal.fbs
 
 .PHONY: static
 static :

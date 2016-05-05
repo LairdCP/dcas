@@ -11,9 +11,9 @@ LRD_VERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUB
 #
 # INCLUDE DIRECTORIES AND OPERATING SYSTEM LIBRARY
 #
-INCLUDES += -Isrc/include -Ilib.local/flatcc/include -Ischema/
+INCLUDES += -Isrc/include -Ilib/flatcc/include -Ischema/
 TARGET  = dcas
-LDFLAGS = -Llib.local/flatcc/lib
+LDFLAGS = -Llib/flatcc/lib
 LIBS = -lssh -lssh_threads -lflatccrt -lsdc_sdk -lpthread
 
 CPPCHECK := $(shell cppcheck --version 2>/dev/null)
@@ -41,7 +41,7 @@ endif
 # if we haven't defined the path to the FLATCC tool, then use the one we
 # hopefully generated. For buildroot, this should be passed in preset, typically:
 #   FLATCC="$(HOST_DIR)/usr/bin/flatcc"
-FLATCC ?= ../lib.local/flatcc/bin/flatcc
+FLATCC ?= ../lib/flatcc/bin/flatcc
 
 CC ?= gcc
 CXX ?= g++
@@ -78,7 +78,7 @@ GENERATED = 	schema/dcal_reader.h
 .PHONY: all
 all : static unit $(TARGET) check
 
-$(TARGET) : libssh flatcc debug_msg build_msg $(GENERATED) $(OBJECTS)
+$(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
 schema/dcal_reader.h : schema/dcal.fbs
@@ -110,39 +110,40 @@ check:
 # Library builds
 #
 lib:
-	mkdir -p lib.local
+	mkdir -p lib
 
-lib.local/libssh: lib
-	cd lib.local && git clone git://git.libssh.org/projects/libssh.git
+lib/libssh: lib
+	cd lib && git clone git://git.libssh.org/projects/libssh.git
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
-	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.so.4.4.0
+	LIBSSH_TARGET := lib/libssh/build/src/libssh.so.4.4.0
 endif
 ifeq ($(UNAME_S),Darwin)
-	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.4.4.0.dylib
+	LIBSSH_TARGET := lib/libssh/build/src/libssh.4.4.0.dylib
 endif
-$(LIBSSH_TARGET): lib lib.local/libssh
-	cd lib.local/libssh && git checkout 4d43fbfb50710055352c4fda812b6dc98143d336
-	mkdir -p lib.local/libssh/build
-	cd lib.local/libssh/build && cmake ..
-	cd lib.local/libssh/build && make
+$(LIBSSH_TARGET): lib lib/libssh
+	cd lib/libssh && git checkout 4d43fbfb50710055352c4fda812b6dc98143d336
+	mkdir -p lib/libssh/build
+	cd lib/libssh/build && cmake ..
+	cd lib/libssh/build && make
 
 .PHONY: libssh
 libssh: $(LIBSSH_TARGET)
 
 libssh_install: $(LIBSSH_TARGET)
-	cd lib.local/libssh/build && make install
+	cd lib/libssh/build && make install
 
-lib.local/flatcc/lib/libflatcc.a : lib.local/flatcc
-	cd lib.local/flatcc && git checkout v0.3.3
-	cd lib.local/flatcc && ./scripts/build.sh
+lib/flatcc/lib/libflatcc.a : lib/flatcc
+	cd lib/flatcc && git checkout v0.2.0
+	cd lib/flatcc && patch -p0 < ../../patches/flatcc001_ninja-to-make.patch
+	cd lib/flatcc && ./scripts/build.sh
 
-lib.local/flatcc : lib
-	cd lib.local && git clone git@github.com:dvidelabs/flatcc.git
+lib/flatcc : lib
+	cd lib && git clone git@github.com:dvidelabs/flatcc.git
 
 .PHONY: flatcc
-flatcc: lib.local/flatcc/lib/libflatcc.a
+flatcc: lib/flatcc/lib/libflatcc.a
 
 #
 # Tools/testing
@@ -179,7 +180,7 @@ build_msg:
 debug_msg:
 	$(DEBUGTXT)
 
-# help
+# help 
 .PHONY: help
 help:
 	@make --print-data-base --question | \
