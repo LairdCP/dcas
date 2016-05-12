@@ -78,7 +78,7 @@ GENERATED = schema/dcal_reader.h
 #
 
 .PHONY: all
-all : lib.local/flatcc/bin/flatcc lib.local/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys init.d
+all :  $(TARGET) $(TARGET_DIR)/usr/bin/$(TARGET) keys init.d
 
 $(TARGET) : debug_msg build_msg $(GENERATED) $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
@@ -92,9 +92,17 @@ schema/dcal_reader.h: schema/dcal.fbs
 .PHONY: $(TARGET)-install
 $(TARGET)-install: $(TARGET_DIR)/usr/bin/$(TARGET)
 
+libs-clean:
+	rm -rf lib.local
+
+.PHONY: libs-clean
+
+libs: lib.local/flatcc/bin/flatcc lib.local/xflatcc/lib/libflatcc.a $(STAGING_DIR)/usr/lib/libflatccrt.a
+.PHONY: libs
+
+
 lib:
 	mkdir -p lib.local
-
 
 #
 # FlatCC local
@@ -157,7 +165,6 @@ clean :
 	-rm -f $(DEPENDS)
 	-rm -f $(TARGET)
 	-rm -f schema/*.h
-	-rm -rf lib.local
 	-rm -f xflatcc_prep_and_patch_flag
 	-rm -f flatcc_prep_and_patch_flag
 

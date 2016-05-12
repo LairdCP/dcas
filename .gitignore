@@ -2,7 +2,7 @@ output/
 *.o
 *.d
 dcas
-lib/
+lib.local/
 test/client/dcas-client
 *.orig
 xflatcc_prep_and_patch_flag
