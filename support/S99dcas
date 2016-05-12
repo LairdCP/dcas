@@ -27,12 +27,11 @@
 
 start() {
     echo "Starting dcas"
-    /usr/bin/loop_dcas.sh &
+    /usr/bin/dcas | logger &
 }
 
 stop() {
     echo "Stopping dcas"
-    ps | grep loop_dcas | grep -v grep | awk '{print $1}' | xargs kill -9
     killall dcas 2>/dev/null
   true
 }

@@ -14,4 +14,5 @@ struct SSH_DATA {
 	sem_t thread_list;
 };
 
+int run_sshserver( struct SSH_DATA *);
 #endif // __SSH_SERVER_H__

@@ -14,8 +14,6 @@ void PrintVersion( void );
 void PrintHelp( void );
 void ExitClean( int ExitVal );
 
-int run_sshserver( struct SSH_DATA *);
-
 static char * runtime_name = "";
 #define DEFAULT_KEYS_FOLDER "/etc/dcas"
 
@@ -98,11 +96,7 @@ int main(int argc,char *argv[])
 	sem_init(&ssh_data.thread_list, 0, MAX_THREADS);
 
 	rc = run_sshserver( &ssh_data );
-	DBGDEBUG("Got %d return from run_sshserver()\n", rc);
-
-	sleep(1); // allow thread(s) to exit - only need to do this to be able to
-	          // check memory usage with valgrind to avoid false positives
-	DBGDEBUG("DCAS Exiting\n");
+	DBGDEBUG("Got %d return from run_sshserver()\nDCAS Exiting\n", rc);
 
 	sem_destroy(&ssh_data.thread_list);
 	ExitClean( rc );

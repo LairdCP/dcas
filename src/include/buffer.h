@@ -4,10 +4,14 @@
 
 #define BUFSIZE 2048
 
-//processbufer requires a pointer to a buffer of size BUFSIZE
-//the passed in buffer will be reused for the data to be sent with the
-//size as the return value. A 0 return value means there is no data
-//to send back, while a negative value indicates error
-int processbuff(char * buf, size_t size, pthread_mutex_t *sdk_lock);
+//process_buffer Char* buf parameter holds the inbound buffer and will
+//contain the outbound buffer on return, if no error.
+//buf_size is the size of the buffer while nbytes is the number of bytes
+//the buffer is currently using.  A positive return value indicates the
+//number of bytes used in the return buffer. A negative value indicates
+//an error.  Since we always send an ACK or NACK if no unrecoverable error,
+//we should never return a value 0.
+int process_buffer(char * buf, size_t buf_size, size_t nbytes,
+                   pthread_mutex_t *sdk_lock, bool must_be_handshake);
 
 #endif //__buffer_h__

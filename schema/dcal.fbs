@@ -8,22 +8,22 @@ table Handshake {
 	server:bool = false;
 	magic:Magic;
 	ip:string;
+	api_level: uint;
 }
-
-//root_type DCAL.session.Handshake;
 
 table Status {
 	cardState:uint;
 	ProfileName:string;
-	ssid:string;
+	ssid:[ubyte];
+	ssid_len: uint;
 	channel:uint;
 	rssi:int;
 	clientName:string;
-	mac:string;
-	ip:string;
+	mac:[ubyte];
+	ip:[ubyte];
 	ipv6:[string];
-	AP_mac:string;
-	AP_ip:string;
+	AP_mac:[ubyte];
+	AP_ip:[ubyte];
 	AP_name:string;
 	bitRate:uint;
 	txPower:uint;
@@ -31,15 +31,16 @@ table Status {
 	beaconPeriod:uint;
 }
 
-//root_type Status;
-
 enum Commands:uint { INVALID =0, GETSTATUS =1 }
 
 table Command {
 	command:Commands;
 }
 
-
-//root_type Command;
-
 union Any { Handshake, Command, Status }
+
+table Payload {
+	message: Any;
+}
+
+root_type Payload;

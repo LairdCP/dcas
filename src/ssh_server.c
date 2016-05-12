@@ -19,7 +19,7 @@
 #define SSHD_PASSWORD "libssh"
 
 typedef struct LIST_T {
-	void * data;
+	pthread_t data;
 	struct LIST_T * next;
 } list_t;
 
@@ -39,10 +39,12 @@ struct DISPATCH_DATA {
 	struct THREAD_LIST completed;
 };
 
+#define DUMP_LOCATION printf("%s\t%s:%d\n",__FILE__,__func__,__LINE__);
+
 // when a thread completes, it calls this routine so that it's thread ID
 // can be queued.  At a later point, the list will be emptied and the
 // thread's resources will be recovered by a pthread_join() call
-void add_thread_to_completed_list( struct THREAD_LIST *completed, void * data)
+void add_thread_to_completed_list( struct THREAD_LIST *completed, pthread_t data)
 {
 	pthread_mutex_lock(&completed->lock);
 	list_t * curr = completed->head;
@@ -73,9 +75,7 @@ void empty_completed_thread_list( struct THREAD_LIST *completed)
 	list_t * curr = completed->head;
 	list_t * next = NULL;
 	while (curr) {
-		DBGDEBUG("joining thread 0x%x\n", *(int*)curr->data);
-		pthread_join( *(pthread_t *)curr->data, NULL );
-		DBGDEBUG("Join complete\n");
+		pthread_join(curr->data, NULL );
 		next = curr->next;
 		free(curr);
 		curr=next;
@@ -233,15 +233,16 @@ void * ssh_session_thread( void *param )
 
 	DBGDEBUG("Client connected!\n");
 
+	bool verify_handshake = true;
 	do {
 		nbytes=ssh_channel_read(chan,buf, BUFSIZE, 0);
 		if(nbytes>0) {
 			DBGINFO("Got %d bytes from client:\n", nbytes);
 
-			nbytes = processbuff(buf, nbytes, &dispatch_data->sdk_lock);
+			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake);
 
 			if (nbytes<0){
-				DBGERROR("error in processbuf(): %d\n", nbytes);
+				DBGERROR("error in process_bufer(): %d\n", nbytes);
 				goto exit_channel;
 			}
 			if (nbytes==0){
@@ -253,6 +254,7 @@ void * ssh_session_thread( void *param )
 					DBGERROR("Failure to send buffer\n");
 					goto exit_channel;
 				}
+				verify_handshake = false;
 			}
 		}
 		if ((nbytes==SSH_AGAIN) && (*alive))
@@ -270,9 +272,8 @@ exit_session:
 	ssh_free(session);
 	session = NULL;
 
-	DBGDEBUG("adding 0x%x to completed list\n",(int)pthread_self());
 	add_thread_to_completed_list( &dispatch_data->completed,
-	                              (void *) pthread_self());
+	                               pthread_self());
 	sem_post(dispatch_data->thread_list);
 	DBGDEBUG("thread exiting\n");
 	return NULL;
@@ -298,7 +299,7 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	char key_tmp[MAX_PATH];
 	pthread_t child;
 	struct timespec sleep_duration;
-	struct DISPATCH_DATA dispatch_data;
+	struct DISPATCH_DATA dispatch_data = {0};
 
 	i = 10;
 	sleep_duration.tv_sec =0;
@@ -362,7 +363,8 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 		if(r==SSH_ERROR) {
 			//TODO - determine if we should stay running or exit the application
-			DBGERROR("Error accepting a connection: %s\n", ssh_get_error(sshbind));
+			if (ssh_data->alive)
+				DBGERROR("Error accepting a connection: %s\n", ssh_get_error(sshbind));
 			ssh_free(dispatch_data.session);
 			dispatch_data.session = NULL;
 			continue;
