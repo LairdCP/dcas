@@ -153,7 +153,6 @@ keys:
 
 init.d:
 	install -D -m 755 support/S99dcas $(TARGET_DIR)/etc/init.d/S99dcas
-	install -D -m 755 support/loop_dcas.sh $(TARGET_DIR)/usr/bin/loop_dcas.sh
 
 #
 # Utility

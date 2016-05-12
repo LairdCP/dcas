@@ -170,6 +170,7 @@ clean :
 
 .PHONY: cleanall
 cleanall: clean
+	rm -rf lib.local
 
 .PHONY: build_msg
 build_msg:
