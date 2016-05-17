@@ -22,20 +22,72 @@
 #define SDKLOCK(x) (pthread_mutex_lock(x))
 #define SDKUNLOCK(x) (pthread_mutex_unlock(x))
 
-int is_handshake_valid( ns(Payload_table_t) payload)
+// a 0 return code means invalid buffer
+flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 {
-	ns(Handshake_table_t) handshake;
-	const char * ip;
-	int ret;
+	flatbuffers_thash_t ret;
+	if ((buf==NULL) || (size==0))
+		return 0;
 
-	handshake = ns(Payload_message(payload));
+	ret = flatbuffers_get_type_hash(buf);
+	switch(ret) {
+		case ns(Handshake_type_hash):
+			if(ns(Handshake_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Status_type_hash):
+			if(ns(Status_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Command_type_hash):
+			if(ns(Command_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		default:
+			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
+			ret = 0;
+	}
+	return ret;
+}
+
+const char * buftype_to_string(flatbuffers_thash_t buftype)
+{
+	switch(buftype) {
+		case ns(Handshake_type_hash):
+			return "Handshake";
+			break;
+		case ns(Status_type_hash):
+			return "Status";
+			break;
+		case ns(Command_type_hash):
+			return "Command";
+			break;
+		default:
+			return("unrecognized\n");
+	}
+}
+
+int is_handshake_valid( ns(Handshake_table_t) handshake)
+{
+	#ifdef DEBUG_BUILD
+	const char * ip;
+	#endif
+	int ret;
 
 	if (ns(Handshake_server(handshake)) == true) {
 		DBGERROR("Handshake marked as from server\n");
 		return 0;
 	}
 
+	#ifdef DEBUG_BUILD
 	ip = ns(Handshake_ip(handshake));
+	#endif
 	DBGINFO("Handshake ip: %s\n", ip);
 
 	if (ns(Handshake_magic(handshake)) == ns(Magic_HELLO))
@@ -47,6 +99,7 @@ int is_handshake_valid( ns(Payload_table_t) payload)
 int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
 {
 	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Handshake_type_identifier));
 	ns(Handshake_start(B));
 	ns(Handshake_server_add(B, true));
 	ns(Handshake_magic_add(B, res_code));
@@ -55,15 +108,7 @@ int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
 	//Could have it included by default in process_buffer call
 //	ns(Handshake_ip_create_str(B, "192.168.0.1"));
 	ns(Handshake_api_level_add(B, DCAL_API_VERSION));
-	ns(Handshake_ref_t) hs = ns(Handshake_end(B));
-
-	ns(Any_union_ref_t) any;
-	any.Handshake = hs;
-	any.type = ns(Any_Handshake);
-
-	ns(Payload_start_as_root(B));
-	ns(Payload_message_add(B, any));
-	ns(Payload_end_as_root(B));
+	ns(Handshake_end_as_root(B));
 
 	return 0;
 }
@@ -99,11 +144,13 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 
 // only dealing with client mode for now
 	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Status_type_identifier));
 	ns(Status_start(B));
 	ns(Status_cardState_add(B, status.cardState));
 	ns(Status_ProfileName_create_str(B, status.configName));
-	ns(Status_ssid_create(B, (unsigned char *)ssid.val, LRD_WF_MAX_SSID_LEN));
-	ns(Status_ssid_len_add(B, ssid.len));
+	if (ssid.len > LRD_WF_MAX_SSID_LEN)
+		ssid.len = LRD_WF_MAX_SSID_LEN;  // should never happen
+	ns(Status_ssid_create(B, (unsigned char *)ssid.val, ssid.len));
 	ns(Status_channel_add(B, status.channel));
 	ns(Status_rssi_add(B, status.rssi));
 	ns(Status_clientName_create_str(B, status.clientName));
@@ -130,15 +177,7 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 
 	ns(Status_ipv6_add(B, fcv_addresses));
 
-	ns(Status_ref_t)flatc_status = ns(Status_end(B));
-
-	ns(Any_union_ref_t) any;
-	any.Status = flatc_status;
-	any.type = ns(Any_Status);
-
-	ns(Payload_start_as_root(B));
-	ns(Payload_message_add(B, any));
-	ns(Payload_end_as_root(B));
+	ns(Status_end_as_root(B));
 
 	free(ipv6_names);
 	return 0;
@@ -148,14 +187,17 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
-int process_command(flatcc_builder_t *B, ns(Payload_table_t) payload,
+int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
  pthread_mutex_t *sdk_lock)
 {
-	ns(Command_table_t) cmd = ns(Payload_message(payload));
+	switch(ns(Command_command(cmd))){
+		case ns(Commands_GETSTATUS):
+			return build_status(B, sdk_lock);
+			break;
 //TODO - add other command processing
-	if (ns(Command_command(cmd)) == ns(Commands_GETSTATUS))
-		return build_status(B, sdk_lock);
-	return 0;
+		default:
+			return 0;
+	}
 }
 
 // the passed in buffer is used for the outbound buffer as well.  The buffer
@@ -170,34 +212,27 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
 	int ret;
+	flatbuffers_thash_t buftype;
 
-	ns(Payload_table_t) payload;
+	//hexdump("read buffer", buf, nbytes, stdout);
 
-	hexdump("read buffer", buf, nbytes, stdout);
-
-	//validate buffer
-	if((ret = ns(Payload_verify_as_root(buf, nbytes)))){
+	buftype = verify_buffer(buf, nbytes);
+	if (buftype==0){
 		DBGERROR("could not verify buffer.  Sending NACK\n");
 		goto respond_with_nack;
 	}
 
-// convert char * buffer to flat buffer
-	if (!(payload = ns(Payload_as_root(buf)))) {
-		DBGERROR("could not convert to payload buffer: %s\n", flatcc_verify_error_string(ret));
+	DBGINFO("incoming buffer has type: %s\n", buftype_to_string(buftype));
+
+	if ((must_be_handshake) && (buftype != ns(Handshake_type_hash))){
+		DBGERROR("wanted a handshake but this is: %s\n", buftype_to_string(buftype));
 		goto respond_with_nack;
 	}
 
-	ns(Any_union_type_t) any = ns(Payload_message_type(payload));
-
-	if ((must_be_handshake) && (any != ns(Any_Handshake))){
-		DBGERROR("wanted a handshake but this is not one: %s\n", flatcc_verify_error_string(ret));
-		goto respond_with_nack;
-	}
-
-	switch(any) {
-		case ns(Any_Handshake):
+	switch(buftype) {
+		case ns(Handshake_type_hash):
 			DBGINFO("inbound handshake buffer received\n");
-			if (is_handshake_valid(payload)) {
+			if (is_handshake_valid(ns(Handshake_as_root(buf)))) {
 				DBGINFO("Got good protocol HELLO\n");
 				build_handshake_ack(&builder, ns(Magic_ACK));
 				goto respond_normal;
@@ -205,9 +240,9 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			// not a valid handshake - respond with nack
 			goto respond_with_nack;
 			break;
-		case ns(Any_Command):
+		case ns(Command_type_hash):
 			// process command
-			if ((ret=process_command(&builder, payload, sdk_lock))){
+			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock))){
 				// un-recoverable errors will be negative
 				if (ret > 0)
 					goto respond_with_nack;

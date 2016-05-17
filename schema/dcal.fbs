@@ -11,11 +11,14 @@ table Handshake {
 	api_level: uint;
 }
 
+table U32 {
+	value: uint;
+}
+
 table Status {
 	cardState:uint;
 	ProfileName:string;
 	ssid:[ubyte];
-	ssid_len: uint;
 	channel:uint;
 	rssi:int;
 	clientName:string;
@@ -31,16 +34,67 @@ table Status {
 	beaconPeriod:uint;
 }
 
-enum Commands:uint { INVALID =0, GETSTATUS =1 }
+table Version {
+	cli: uint;
+	sdk: uint;
+	chipset: uint;
+	driver: uint;
+	firmware:string;
+	supplicant: string;
+}
+
+table Globals {
+	auth: uint;
+	channel_set_a: uint;
+	channel_set_b: uint;
+	auto_profile: uint;
+	beacon_miss: uint;
+	bt_coex: uint;
+	ccx: bool;
+	cert_path:string;
+	date_check:bool;
+	def_adhoc: uint;
+	fips: uint;
+	pmk: uint;
+	probe_delay: uint;
+	reg: uint;
+	roam_period: uint;
+	roam_trigger: uint;
+	rts: uint;
+	scan_dfs: uint;
+	ttls: uint;
+	uapsd: uint;
+	wmm: bool;
+}
+
+table Profile {
+	name:string;
+	ssid:[ubyte];
+	client_name:string;
+	txPwr:uint;
+	auth:uint;
+	eap:uint;
+	pwrsave:uint;
+	pspDelay:uint;
+	wep:uint;
+	bitrate:uint;
+	mode:uint;
+	usr_name:string;
+	pwd:[ubyte];
+	psk:[ubyte];
+	keys:[ubyte];
+}
+
+table Profiles {
+	profiles:[Profile];
+}
+
+// commands payloads to dcas - can be unused for some commands
+union Cmd_pl { Globals, Profile, Profiles, U32 }
+
+enum Commands:uint { INVALID =0, GETVERSION=1, GETSTATUS =2, GETPROFILE =3, SETPROFILE =4, GETPROFILES =5,  ACTIVATEPROFILE=6, ENABLERADIO=7, DISABLERADIO=8 }
 
 table Command {
 	command:Commands;
+	cmd_pl: Cmd_pl;
 }
-
-union Any { Handshake, Command, Status }
-
-table Payload {
-	message: Any;
-}
-
-root_type Payload;

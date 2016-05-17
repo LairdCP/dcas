@@ -24,6 +24,56 @@ void ExitClean( int ExitVal );
 static char * runtime_name = "";
 ssh_session my_ssh_session = NULL;
 
+// a 0 return code means invalid buffer
+flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
+{
+	flatbuffers_thash_t ret;
+	if ((buf==NULL) || (size==0))
+		return 0;
+
+	ret = flatbuffers_get_type_hash(buf);
+	switch(ret) {
+		case ns(Handshake_type_hash):
+			if(ns(Handshake_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Status_type_hash):
+			if(ns(Status_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Command_type_hash):
+			if(ns(Command_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		default:
+			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
+			ret = 0;
+	}
+	return ret;
+}
+
+char * buftype_to_string(flatbuffers_thash_t buftype)
+{
+	switch(buftype) {
+		case ns(Handshake_type_hash):
+			return "Handshake";
+			break;
+		case ns(Status_type_hash):
+			return "Status";
+			break;
+		case ns(Command_type_hash):
+			return "Command";
+			break;
+		default:
+			return("unrecognized\n");
+	}
+}
 
 int verify_knownhost(ssh_session session)
 {
@@ -111,79 +161,39 @@ int verify_knownhost(ssh_session session)
 #define LAIRD_HELLO "HELLO DCAS"
 #define LAIRD_RESPONSE "WELCOME TO FAIRFIELD"
 
-int build_hello(flatcc_builder_t *B)
+void build_hello(flatcc_builder_t *B)
 {
 	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Handshake_type_identifier));
 	ns(Handshake_start(B));
 	ns(Handshake_magic_add(B, ns(Magic_HELLO)));
 	ns(Handshake_ip_create_str(B, "127.0.0.1"));
 	ns(Handshake_api_level_add(B, DCAL_API_VERSION));
 // can force a NACK by setting as server if want to verify NACK returned from server
 //ns(Handshake_server_add(&builder, true));
-	ns(Handshake_ref_t) hs = ns(Handshake_end(B));
 
-	ns(Any_union_ref_t) any;
-	any.Handshake = hs;
-	any.type = ns(Any_Handshake);
+	ns(Handshake_end_as_root(B));
 
-	ns(Payload_start_as_root(B));
-	ns(Payload_message_add(B, any));
-	ns(Payload_end_as_root(B));
-
-	return 0;
+	return ;
 }
 
-int build_query_status(char *buf, size_t *size)
+void build_query_status(flatcc_builder_t *B)
 {
-	flatcc_builder_t builder;
 
-	flatcc_builder_init(&builder);
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Command_type_identifier));
 
-	ns(Command_start(&builder));
-	ns(Command_command_add(&builder, ns(Commands_GETSTATUS)));
-	ns(Command_ref_t) command = ns(Command_end(&builder));
+	ns(Command_start(B));
+	ns(Command_command_add(B, ns(Commands_GETSTATUS)));
+	ns(Command_end_as_root(B));
 
-	ns(Any_union_ref_t) any;
-	any.Command = command;
-	any.type = ns(Any_Command);
-
-	ns(Payload_start_as_root(&builder));
-	ns(Payload_message_add(&builder, any));
-	ns(Payload_end_as_root(&builder));
-
-	flatcc_builder_copy_buffer(&builder, buf, *size);
-	*size =flatcc_builder_get_buffer_size(&builder);
-
-	flatcc_builder_clear(&builder);
-
-	return 0;
+	return ;
 }
 
-int is_handshake_ack_valid(void *buf, size_t nbytes)
+int is_handshake_ack_valid( ns(Handshake_table_t) handshake)
 {
-	ns(Payload_table_t) payload;
-	ns(Handshake_table_t) handshake;
-	ns(Any_union_type_t) any;
 	int ret;
 
-	if((ret = ns(Payload_verify_as_root(buf, nbytes)))){
-		DBGERROR("could not verify buffer, got %s\n", flatcc_verify_error_string(ret));
-		return 1;
-	}
-
-	if (!(payload = ns(Payload_as_root(buf)))) {
-		DBGERROR("Not a Payload\n");
-		return 1;
-	}
-
-	any = ns(Payload_message_type(payload));
-
-	if (any == ns(Any_Handshake))
-		handshake = ns(Payload_message(payload));
-	else{
-		DBGERROR("Payload message was not a Handshake\n");
-		return 1;
-	}
 	switch(ns(Handshake_magic(handshake))){
 		case ns(Magic_ACK):
 			DBGINFO("ACK received\n");
@@ -218,37 +228,17 @@ const char * cardState_to_string(unsigned int cs)
 	}
 }
 
-int dump_status(void *buffer, size_t size)
+int dump_status(ns(Status_table_t status))
 {
-	ns(Payload_table_t) payload;
-	ns(Any_union_type_t) any;
-	ns(Status_table_t) status = NULL;
 	DCAL_ERR ret = DCAL_SUCCESS;
-
-// verify is status buffer
-	if((ret=ns(Payload_verify_as_root(buffer, size)))){
-		DBGERROR("could not verify status buffer.  Size is %zu. Got %s\n", size, flatcc_verify_error_string(ret));
-		return (DCAL_FLATBUFF_ERROR);
-	}
-
-	if (!(payload = ns(Payload_as_root(buffer)))) {
-		DBGERROR("Not a Payload\n");
-		return 0;
-	}
-
-	any = ns(Payload_message_type(payload));
-
-	if (any == ns(Any_Status))
-		status = ns(Payload_message(payload));
-	else{
-		DBGERROR("Payload message was not a status\n");
-		return 0;
-	}
 
 	const unsigned char *string;
 
 	printf("Card State: %s\n", cardState_to_string(ns(Status_cardState(status))));
 	printf("Profile Name: %s\n", ns(Status_ProfileName(status)));
+	// ssid is not a string so printing this as one is dangerous - only done
+	// here for simplicity as this is not meant for actual code.
+	// use a hex output.  Use flatbuffers_uint8_vec_len for length
 	printf("SSID: %s\n", ns(Status_ssid(status)));
 	printf("Channel: %d\n", ns(Status_channel(status)));
 	printf("rssi: %d\n", ns(Status_rssi(status)));
@@ -308,6 +298,7 @@ int remote_hello(ssh_session session)
 
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
+
 	build_hello(&builder);
 	handshake_buffer = flatcc_builder_get_direct_buffer(&builder, &nbytes);
 	assert(handshake_buffer);
@@ -315,20 +306,26 @@ int remote_hello(ssh_session session)
 	hexdump("Handshake buffer:", handshake_buffer, nbytes, stderr);
 
 	nwritten = ssh_channel_write(channel, handshake_buffer, nbytes);
-	if (nwritten != nbytes) return SSH_ERROR;
+	if (nwritten != nbytes) {
+		flatcc_builder_clear(&builder);
+		return SSH_ERROR;
+	}
 
 	int bytes_read;
 	bytes_read = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
 
+	flatbuffers_thash_t buftype;
+
 	if (bytes_read < 0) {
-		ssh_channel_close(channel);
-		ssh_channel_free(channel);
-		return SSH_ERROR;
+		rc = SSH_ERROR;
+		goto cleanup;
 	} else {
 		DBGINFO("Response %d bytes from server.\n", bytes_read);
 		hexdump("Buffer:", buffer, bytes_read, stderr);
 
-		if (!is_handshake_ack_valid (buffer, bytes_read)){
+		buftype = verify_buffer(buffer, bytes_read);
+
+		if (buftype == ns(Handshake_type_hash)){
 			DBGINFO("Got proper response from the server\n");
 			rc = SSH_OK;
 		}
@@ -336,23 +333,37 @@ int remote_hello(ssh_session session)
 		{
 			DBGERROR("Got bad response from the server\n");
 			rc = SSH_ERROR;
+			goto cleanup;
 		}
 	}
-	build_query_status(buffer, &nbytes);
+
+	build_query_status(&builder);
+
+	nbytes = flatcc_builder_get_buffer_size(&builder);
+	assert(nbytes <= 2048);
+	flatcc_builder_copy_buffer(&builder, buffer, nbytes);
+
 	hexdump("Command buffer:", buffer, nbytes, stderr);
 	nwritten = ssh_channel_write(channel, buffer, nbytes);
 
 	bytes_read = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
 	hexdump("Received buffer:", buffer, bytes_read, stderr);
 	DBGINFO("expecting a status buffer\n");
-	is_handshake_ack_valid(buffer, bytes_read);
-
-	dump_status(buffer, bytes_read);
 
 
+	buftype = verify_buffer(buffer, bytes_read);
+
+	if (buftype == ns(Handshake_type_hash))
+		is_handshake_ack_valid(ns(Handshake_as_root(buffer)));
+
+	if (buftype == ns(Status_type_hash));
+		dump_status(ns(Status_as_root(buffer)));
+
+cleanup:
 	ssh_channel_send_eof(channel);
 	ssh_channel_close(channel);
 	ssh_channel_free(channel);
+	flatcc_builder_clear(&builder);
 	return rc;
 }
 
