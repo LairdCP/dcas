@@ -289,13 +289,6 @@ int remote_hello(ssh_session session)
 		return rc;
 	}
 
-	rc = ssh_channel_request_shell(channel);
-	if (rc != SSH_OK) {
-		ssh_channel_close(channel);
-		ssh_channel_free(channel);
-		return rc;
-	}
-
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
 

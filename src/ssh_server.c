@@ -147,7 +147,6 @@ void * ssh_session_thread( void *param )
 	ssh_channel chan=0;
 	char buf[BUFSIZE];
 	int auth=0;
-	int shell=0;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
 	bool *alive;
 	ssh_session session;
@@ -201,34 +200,6 @@ void * ssh_session_thread( void *param )
 		DBGERROR("Error: client did not ask for a channel session (%s)\n",
 		       ssh_get_error(session));
 		goto exit_disconnect;
-	}
-
-	/* wait for a shell */
-	do {
-		message = ssh_message_get(session);
-		if(message != NULL) {
-			if(ssh_message_type(message) == SSH_REQUEST_CHANNEL &&
-			    ssh_message_subtype(message) == SSH_CHANNEL_REQUEST_SHELL) {
-				shell = 1;
-				ssh_message_channel_request_reply_success(message);
-				ssh_message_free(message);
-				break;
-			}
-			ssh_message_reply_default(message);
-			ssh_message_free(message);
-		} else {
-			break;
-		}
-	} while(!shell && *alive);
-
-	if(!*alive) {
-		DBGINFO("Alive indicator has been disabled\n");
-		goto exit_channel;
-	}
-
-	if(!shell) {
-		DBGERROR("Error: No shell requested (%s)\n", ssh_get_error(session));
-		goto exit_channel;
 	}
 
 	DBGDEBUG("Client connected!\n");
