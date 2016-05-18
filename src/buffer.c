@@ -49,6 +49,36 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
+		case ns(U32_type_hash):
+			if(ns(U32_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Version_type_hash):
+			if(ns(Version_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Globals_type_hash):
+			if(ns(Globals_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Profile_type_hash):
+			if(ns(Profile_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Profiles_type_hash):
+			if(ns(Profiles_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
 		default:
 			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
 			ret = 0;
@@ -68,6 +98,22 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 		case ns(Command_type_hash):
 			return "Command";
 			break;
+		case ns(U32_type_hash):
+			return "U32";
+			break;
+		case ns(Version_type_hash):
+			return "Version";
+			break;
+		case ns(Globals_type_hash):
+			return "Globals";
+			break;
+		case ns(Profile_type_hash):
+			return "Profile";
+			break;
+		case ns(Profiles_type_hash):
+			return "Profiles";
+			break;
+
 		default:
 			return("unrecognized\n");
 	}
@@ -132,14 +178,14 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
 		DBGERROR("GetCurrentStatus() failed with %d\n", result);
-		return -1;  //TODO make a specific return code indicative of an SDK failure
+		return -DCAL_SDK_ERROR;
 	}
 	SDKLOCK(sdk_lock);
 	result = LRD_WF_GetSSID(&ssid);
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
 		DBGERROR("LRD_WF_GetSSID() failed with %d\n", result);
-		return -1;  //TODO make a specific return code indicative of an SDK failure
+		return -DCAL_SDK_ERROR;
 	}
 
 // only dealing with client mode for now
@@ -195,6 +241,14 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			return build_status(B, sdk_lock);
 			break;
 //TODO - add other command processing
+		case ns(Commands_GETVERSION):
+		case ns(Commands_GETPROFILE):
+		case ns(Commands_SETPROFILE):
+		case ns(Commands_GETPROFILES):
+		case ns(Commands_ACTIVATEPROFILE):
+		case ns(Commands_ENABLERADIO):
+		case ns(Commands_DISABLERADIO):
+
 		default:
 			return 0;
 	}

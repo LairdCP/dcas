@@ -41,6 +41,7 @@ table Version {
 	driver: uint;
 	firmware:string;
 	supplicant: string;
+	dcas: uint;
 }
 
 table Globals {
@@ -92,7 +93,16 @@ table Profiles {
 // commands payloads to dcas - can be unused for some commands
 union Cmd_pl { Globals, Profile, Profiles, U32 }
 
-enum Commands:uint { INVALID =0, GETVERSION=1, GETSTATUS =2, GETPROFILE =3, SETPROFILE =4, GETPROFILES =5,  ACTIVATEPROFILE=6, ENABLERADIO=7, DISABLERADIO=8 }
+enum Commands:uint {
+	INVALID =0,
+	GETVERSION=1,
+	GETSTATUS =2,
+	GETPROFILE =3,
+	SETPROFILE =4,
+	GETPROFILES =5,
+	ACTIVATEPROFILE=6,
+	ENABLERADIO=7,
+	DISABLERADIO=8 }
 
 table Command {
 	command:Commands;
