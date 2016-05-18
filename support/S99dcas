@@ -27,7 +27,7 @@
 
 start() {
     echo "Starting dcas"
-    /usr/bin/dcas | logger &
+    /usr/bin/dcas 2>&1 | logger &
 }
 
 stop() {
