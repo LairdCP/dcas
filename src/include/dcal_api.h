@@ -40,29 +40,31 @@ typedef enum _DCAL_ERR{
 	DCAL_NOT_IMPLEMENTED,
 	DCAL_SSH_ERROR,
 	DCAL_FLATBUFF_ERROR,
+	DCAL_FLATCC_NOT_INITIALIZED,
+	DCAL_SDK_ERROR = 100,
 } DCAL_ERR;
 
-#define TBD 80*4 // arbitrary size.  Will be specific once the internal structure elements are fully defined.
 typedef char * FQDN;
 
 typedef void * laird_session_handle;
 
 #define MAC_SZ 6
 #define IP4_SZ 4
-#define IP6_SZ 8
+#define IP6_STR_SZ 46 //max string:0000:0000:0000:0000:0000:0000:xxx.xxx.xxx.xxx plus NULL (IPV4 mapped IPV6 address)
 #define NAME_SZ 48
 #define SSID_SZ 32
 
 typedef struct _laird_status_struct {
 	unsigned int cardState;
 	char ProfileName[NAME_SZ];
-	char ssid[SSID_SZ+1];
+	char ssid[SSID_SZ]; //32 characters.  Can contain non-ascii characters.  Not necessarily NULL terminated. Use ssid_len to access data.
+	unsigned int ssid_len;
 	unsigned int channel;
 	int rssi;
 	char clientName[NAME_SZ];
 	unsigned char mac[MAC_SZ];
 	unsigned char ipv4[IP4_SZ];
-	unsigned char ipv6[IP6_SZ];
+	char ipv6[IP6_STR_SZ];
 	unsigned char ap_mac[MAC_SZ];
 	unsigned char ap_ip[MAC_SZ];
 	char ap_name[NAME_SZ];
