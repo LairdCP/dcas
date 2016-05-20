@@ -10,8 +10,7 @@ table Handshake {
 	ip:string;
 	api_level: uint;
 	// on error, the NACK can be used to send back SDK or DCAL error codes
-	sdk_error: uint;
-	dcal_error: uint;
+	error: uint;
 }
 
 table Event {
@@ -91,17 +90,19 @@ table Profile {
 	ssid:[ubyte];
 	client_name:string;
 	txPwr:uint;
-	auth:uint;
-	eap:uint;
 	pwrsave:uint;
 	pspDelay:uint;
-	wep:uint;
+	weptype:uint;
+	auth:uint;
+	eap:uint;
 	bitrate:uint;
-	mode:uint;
-	usr_name:string;
-	pwd:[ubyte];
-	psk:[ubyte];
-	keys:[ubyte];
+	radiomode:uint;
+	security1:string;
+	security2:string;
+	security3:string;
+	security4:string;
+	security5:string;
+	weptxkey:uint;
 }
 
 table Profiles {

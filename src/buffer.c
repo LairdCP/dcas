@@ -147,7 +147,7 @@ int is_handshake_valid( ns(Handshake_table_t) handshake)
 	return 0;
 }
 
-int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
+int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code, unsigned int error)
 {
 	flatcc_builder_reset(B);
 	flatbuffers_buffer_start(B, ns(Handshake_type_identifier));
@@ -159,6 +159,7 @@ int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code)
 	//Could have it included by default in process_buffer call
 //	ns(Handshake_ip_create_str(B, "192.168.0.1"));
 	ns(Handshake_api_level_add(B, DCAL_API_VERSION));
+	ns(Handshake_error_add(B, error));
 	ns(Handshake_end_as_root(B));
 
 	return 0;
@@ -338,10 +339,123 @@ int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enabl
 	if (result != SDCERR_SUCCESS)
 		return result;
 
-	build_handshake_ack(B, ns(Magic_ACK));
+	build_handshake_ack(B, ns(Magic_ACK), 0);
 	return 0;
 }
 
+#define user(p) (char*)ns(Profile_security1(p))
+#define password(p) (char*)ns(Profile_security2(p))
+#define psk(p) (char*)ns(Profile_security1(p))
+#define cacert(p) (char*)ns(Profile_security3(p))
+#define pacfilename(p) (char*)ns(Profile_security3(p))
+#define pacpassword(p) (char*)ns(Profile_security4(p))
+#define usercert(p) (char*)ns(Profile_security4(p))
+#define usercertpassword(p) (char*)ns(Profile_security5(p))
+
+#define weplen(s) ((strlen(s)==5)?WEPLEN_40BIT:(strlen(s)==16)?WEPLEN_128BIT:WEPLEN_NOT_SET)
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(Profile_table_t) profile;
+	SDCConfig config = {{0}};
+	int ret;
+
+	profile = ns(Command_cmd_pl(cmd));
+
+	strncpy(config.configName, ns(Profile_name(profile)), CONFIG_NAME_SZ);
+	assert(flatbuffers_uint8_vec_len(ns(Profile_ssid(profile))) <= SSID_SZ);
+
+	memcpy(&config.SSID, ns(Profile_ssid(profile)), flatbuffers_uint8_vec_len(ns(Profile_ssid(profile))));
+
+	strncpy(config.clientName, ns(Profile_client_name(profile)), CLIENT_NAME_SZ);
+
+	config.txPower = ns(Profile_txPwr(profile));
+	config.authType = ns(Profile_auth(profile));
+	config.eapType = ns(Profile_eap(profile));
+	config.powerSave = ns(Profile_pwrsave(profile));
+	config.powerSave |= (ns(Profile_pspDelay(profile)) << 16);
+	config.wepType = ns(Profile_weptype(profile));
+	config.bitRate = ns(Profile_bitrate(profile));
+	config.radioMode = ns(Profile_radiomode(profile));
+
+	switch(config.wepType) {
+		case WEP_ON:
+		case WEP_AUTO:
+			ret = SetMultipleWEPKeys( &config, ns(Profile_weptxkey(profile)),
+			                      weplen(ns(Profile_security1(profile))),
+			                      (unsigned char*)ns(Profile_security1(profile)),
+			                      weplen(ns(Profile_security2(profile))),
+			                      (unsigned char*)ns(Profile_security2(profile)),
+			                      weplen(ns(Profile_security3(profile))),
+			                      (unsigned char*)ns(Profile_security3(profile)),
+			                      weplen(ns(Profile_security4(profile))),
+			                      (unsigned char*)ns(Profile_security4(profile)));
+			break;
+
+		case WPA_PSK:
+		case WPA2_PSK:
+		case WPA_PSK_AES:
+		case WAPI_PSK:
+			SetPSK(&config, (char*) psk(profile));
+			break;
+
+		case WEP_OFF:
+			// dont set any security elements
+			break;
+		default:
+			switch(config.eapType){
+				case EAP_NONE:
+				case EAP_WAPI_CERT:
+					// do nothing
+					break;
+				case EAP_LEAP:
+					SetLEAPCred(&config, user(profile), password(profile));
+					break;
+				case EAP_EAPTTLS:
+				case EAP_PEAPMSCHAP:
+				case EAP_PEAPGTC:
+					SetPEAPGTCCred(&config, user(profile), password(profile), CERT_FILE, cacert(profile));
+					break;
+				case EAP_EAPFAST:
+					SetEAPFASTCred(&config, user(profile), password(profile), pacfilename(profile), pacpassword(profile));
+					break;
+				case EAP_EAPTLS:
+				case EAP_PEAPTLS:
+					SetEAPTLSCred(&config, user(profile), usercert(profile), CERT_FILE, cacert(profile));
+				break;
+			}
+	}
+
+	SDKLOCK(sdk_lock);
+	ret = AddConfig(&config);
+	if (ret==SDCERR_INVALID_NAME)
+		ret = ModifyConfig(config.configName, &config);
+	SDKUNLOCK(sdk_lock);
+	build_handshake_ack(B, ns(Magic_ACK), ret);
+	return ret;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_activate_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) string;
+	int ret;
+printf("line: %d\n", __LINE__); sleep(1);
+	string = ns(Command_cmd_pl(cmd));
+
+	SDKLOCK(sdk_lock);
+	ret = ActivateConfig((char*)ns(String_value(string)));
+	SDKUNLOCK(sdk_lock);
+	build_handshake_ack(B, ns(Magic_ACK), ret);
+	return ret;
+}
 //return codes:
 //0 - success
 //positive value - benign error
@@ -362,11 +476,15 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			          ns(Command_command(cmd))==ns(Commands_WIFIENABLE));
 			break;
 //TODO - add other command processing
-		case ns(Commands_GETPROFILE):
 		case ns(Commands_SETPROFILE):
-		case ns(Commands_GETPROFILES):
+			return do_set_profile(B, cmd, sdk_lock);
+			break;
 		case ns(Commands_ACTIVATEPROFILE):
-
+			return do_activate_profile(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_GETPROFILE):
+		case ns(Commands_GETPROFILES):
+			return SDCERR_NOT_IMPLEMENTED;
 		default:
 			return 0;
 	}
@@ -391,6 +509,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 	buftype = verify_buffer(buf, nbytes);
 	if (buftype==0){
 		DBGERROR("could not verify buffer.  Sending NACK\n");
+		ret = DCAL_FLATBUFF_VALIDATION_FAIL;
 		goto respond_with_nack;
 	}
 
@@ -398,6 +517,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 
 	if ((must_be_handshake) && (buftype != ns(Handshake_type_hash))){
 		DBGERROR("wanted a handshake but this is: %s\n", buftype_to_string(buftype));
+		ret = DCAL_FLATBUFF_VALIDATION_FAIL;
 		goto respond_with_nack;
 	}
 
@@ -406,10 +526,11 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			DBGINFO("inbound handshake buffer received\n");
 			if (is_handshake_valid(ns(Handshake_as_root(buf)))) {
 				DBGINFO("Got good protocol HELLO\n");
-				build_handshake_ack(&builder, ns(Magic_ACK));
+				build_handshake_ack(&builder, ns(Magic_ACK), 0);
 				goto respond_normal;
 			}
 			// not a valid handshake - respond with nack
+			ret = DCAL_FLATBUFF_VALIDATION_FAIL;
 			goto respond_with_nack;
 			break;
 		case ns(Command_type_hash):
@@ -427,11 +548,12 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			break;
 		default:
 			DBGINFO("failed to get HELLO\n");
+			ret = DCAL_FLATBUFF_ERROR;
 			goto respond_with_nack;
 	}
 
 respond_with_nack:
-	build_handshake_ack(&builder, ns(Magic_NACK));
+	build_handshake_ack(&builder, ns(Magic_NACK), ret);
 respond_normal:
 	flatcc_builder_copy_buffer(&builder, buf, buf_size);
 	nbytes =flatcc_builder_get_buffer_size(&builder);
