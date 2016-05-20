@@ -120,8 +120,8 @@ enum Commands:uint {
 	DELPROFILE,
 	GETPROFILES,
 	ACTIVATEPROFILE,
-	ENABLERADIO,
-	DISABLERADIO }
+	WIFIENABLE,
+	WIFIDISABLE }
 
 table Command {
 	command:Commands;

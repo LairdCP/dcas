@@ -174,7 +174,7 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 
 	status.cardState = CARDSTATE_AUTHENTICATED;
 	SDCERR result;
-	LRD_WF_SSID ssid;
+	LRD_WF_SSID ssid = {0};
 	LRD_WF_ipv6names *ipv6_names = NULL;
 	size_t num_ips = 0;
 
@@ -190,7 +190,8 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
 		DBGERROR("LRD_WF_GetSSID() failed with %d\n", result);
-		return result;
+		// there are conditions such as disabled where this could fail and we
+		// don't want to abort sending back status, so no return here.
 	}
 
 // only dealing with client mode for now
@@ -320,6 +321,26 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	return 0;
 }
 
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enable)
+{
+	SDCERR result;
+	SDKLOCK(sdk_lock);
+		if (enable)
+			result = RadioEnable();
+		else
+			result = RadioDisable();
+	SDKUNLOCK(sdk_lock);
+
+	if (result != SDCERR_SUCCESS)
+		return result;
+
+	build_handshake_ack(B, ns(Magic_ACK));
+	return 0;
+}
 
 //return codes:
 //0 - success
@@ -335,13 +356,16 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_GETVERSION):
 			return build_version(B, sdk_lock);
 			break;
+		case ns(Commands_WIFIENABLE):
+		case ns(Commands_WIFIDISABLE):
+			return do_enable_disable(B, sdk_lock,
+			          ns(Command_command(cmd))==ns(Commands_WIFIENABLE));
+			break;
 //TODO - add other command processing
 		case ns(Commands_GETPROFILE):
 		case ns(Commands_SETPROFILE):
 		case ns(Commands_GETPROFILES):
 		case ns(Commands_ACTIVATEPROFILE):
-		case ns(Commands_ENABLERADIO):
-		case ns(Commands_DISABLERADIO):
 
 		default:
 			return 0;
