@@ -74,6 +74,19 @@ typedef struct _laird_status_struct {
 	unsigned int beaconPeriod;
 } DCAL_STATUS_STRUCT;
 
+#define STR_SZ 80
+typedef struct _laird_version_struct {
+	unsigned int sdk;
+	RADIOCHIPSET chipset;
+	LRD_SYSTEM sys;
+	unsigned int driver;
+	unsigned int dcas;
+	unsigned int dcal;
+	char firmware[STR_SZ];
+	char supplicant[STR_SZ];
+	char release[STR_SZ];
+} DCAL_VERSION_STRUCT;
+
 // API session management
 
 DCAL_ERR dcal_session_create( laird_session_handle * session);
@@ -84,6 +97,9 @@ DCAL_ERR dcal_set_pw( laird_session_handle session, char * pw );
 //TODO DCAL_ERR dcal_set_key( laird_session_handle session, char * keydata, int size);
 DCAL_ERR dcal_session_open ( laird_session_handle session );
 DCAL_ERR dcal_session_close( laird_session_handle session);
+
+// Device Versions
+DCAL_ERR dcal_device_version( laird_session_handle session, DCAL_VERSION_STRUCT * version_struct);
 
 // Device Status
 

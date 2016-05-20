@@ -89,6 +89,36 @@ typedef enum _RADIOMODE {
 	RADIOMODE_BGN
 } RADIOMODE;
 
+typedef enum _RADIOCHIPSET {
+	RADIOCHIPSET_NONE     = 0,
+	RADIOCHIPSET_SDC10    = 1, //BCM4318
+	RADIOCHIPSET_SDC15    = 2, //BCM4322,
+	RADIOCHIPSET_SDC30    = 3, //AR6002,
+	RADIOCHIPSET_SDC40L   = 4, //BCM4319,
+	RADIOCHIPSET_SDC40NBT = 5, //BCM4329,
+	RADIOCHIPSET_SDC45    = 6, //AR6003,
+	RADIOCHIPSET_SDC50    = 7, //AR6004,
+} RADIOCHIPSET;
+
+typedef int32_t LRD_SYSTEM;
+
+// 32 bits
+// 8 bits are chipset <=> RADIOCHIPSET enum
+// 4 bits are family  <=> WB, MSD/SSD
+// 4 bits are HW version -- hardware version
+// 4 bits are Struct version -- structure version
+// 11 bits for reserved
+// 1 bit = driver loaded  (0==not loaded, 1== loaded)
+
+#define LRD_SYS_FAM_WB                     1
+#define LRD_SYS_FAM_MSD_SSD                2
+
+#define RADIOCHIPSET_from_LRD_SYSTEM(sys)  (int)(sys & 0x000000fful)
+#define LRD_SYSTEM_family(sys)             (int)((sys & 0x00000f00ul) >> 8)
+#define LRD_SYSTEM_hw_version(sys)         (int)((sys & 0x0000f000ul) >> 12)
+#define LRD_SYSTEM_struct_version(sys)     (int)((sys & 0x000f0000ul) >> 16)
+#define LRD_SYSTEM_DriverLoaded(sys)       (int)((sys & 0x80000000ul) >> 31)
+
 typedef enum _BITRATE {
 	BITRATE_AUTO  = 0,
 	//rates from 802.11 - 1997

@@ -190,6 +190,19 @@ void build_query_status(flatcc_builder_t *B)
 	return ;
 }
 
+void build_query_versions(flatcc_builder_t *B)
+{
+
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Command_type_identifier));
+
+	ns(Command_start(B));
+	ns(Command_command_add(B, ns(Commands_GETVERSION)));
+	ns(Command_end_as_root(B));
+
+	return ;
+}
+
 int is_handshake_ack_valid( ns(Handshake_table_t) handshake)
 {
 	int ret;
@@ -343,7 +356,6 @@ int remote_hello(ssh_session session)
 	hexdump("Received buffer:", buffer, bytes_read, stderr);
 	DBGINFO("expecting a status buffer\n");
 
-
 	buftype = verify_buffer(buffer, bytes_read);
 
 	if (buftype == ns(Handshake_type_hash))
@@ -351,6 +363,20 @@ int remote_hello(ssh_session session)
 
 	if (buftype == ns(Status_type_hash));
 		dump_status(ns(Status_as_root(buffer)));
+
+	build_query_versions(&builder);
+	nbytes = flatcc_builder_get_buffer_size(&builder);
+	assert(nbytes <= 2048);
+	flatcc_builder_copy_buffer(&builder, buffer, nbytes);
+
+	hexdump("Command buffer:", buffer, nbytes, stderr);
+	nwritten = ssh_channel_write(channel, buffer, nbytes);
+
+	bytes_read = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+	hexdump("Received buffer:", buffer, bytes_read, stderr);
+	DBGINFO("expecting a status buffer\n");
+
+	buftype = verify_buffer(buffer, bytes_read);
 
 cleanup:
 	ssh_channel_send_eof(channel);

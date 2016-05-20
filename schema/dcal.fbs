@@ -9,10 +9,25 @@ table Handshake {
 	magic:Magic;
 	ip:string;
 	api_level: uint;
+	// on error, the NACK can be used to send back SDK or DCAL error codes
+	sdk_error: uint;
+	dcal_error: uint;
+}
+
+table Event {
+	e_type: uint;
+	status: uint;
+	reason: uint;
+	eth_addr: string;
+	flags: ushort;
 }
 
 table U32 {
 	value: uint;
+}
+
+table String {
+	value: string;
 }
 
 table Status {
@@ -32,15 +47,17 @@ table Status {
 	txPower:uint;
 	dtim:uint;
 	beaconPeriod:uint;
+	numipv6addrs: uint;
 }
 
 table Version {
-	cli: uint;
 	sdk: uint;
 	chipset: uint;
+	sys: uint;
 	driver: uint;
 	firmware:string;
 	supplicant: string;
+	release: string;
 	dcas: uint;
 }
 
@@ -66,6 +83,7 @@ table Globals {
 	ttls: uint;
 	uapsd: uint;
 	wmm: bool;
+	numprofiles: uint;
 }
 
 table Profile {
@@ -91,18 +109,19 @@ table Profiles {
 }
 
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, Profiles, U32 }
+union Cmd_pl { Globals, Profile, Profiles, U32, String }
 
 enum Commands:uint {
 	INVALID =0,
-	GETVERSION=1,
-	GETSTATUS =2,
-	GETPROFILE =3,
-	SETPROFILE =4,
-	GETPROFILES =5,
-	ACTIVATEPROFILE=6,
-	ENABLERADIO=7,
-	DISABLERADIO=8 }
+	GETVERSION,
+	GETSTATUS,
+	GETPROFILE,
+	SETPROFILE,
+	DELPROFILE,
+	GETPROFILES,
+	ACTIVATEPROFILE,
+	ENABLERADIO,
+	DISABLERADIO }
 
 table Command {
 	command:Commands;

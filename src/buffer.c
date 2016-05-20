@@ -1,7 +1,12 @@
+#define _BSD_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
 #include "debug.h"
 #include "version.h"
 #include "sdc_sdk.h"
@@ -178,14 +183,14 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
 		DBGERROR("GetCurrentStatus() failed with %d\n", result);
-		return -DCAL_SDK_ERROR;
+		return result;
 	}
 	SDKLOCK(sdk_lock);
 	result = LRD_WF_GetSSID(&ssid);
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
 		DBGERROR("LRD_WF_GetSSID() failed with %d\n", result);
-		return -DCAL_SDK_ERROR;
+		return result;
 	}
 
 // only dealing with client mode for now
@@ -213,8 +218,16 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	SDKLOCK(sdk_lock);
 	result = LRD_WF_GetIpV6Address(NULL, &num_ips);
 	ipv6_names = (LRD_WF_ipv6names*)malloc(sizeof(LRD_WF_ipv6names)*(num_ips+3));
+	if (ipv6_names==NULL){
+		SDKUNLOCK(sdk_lock);
+		return SDCERR_INSUFFICIENT_MEMORY;
+	}
 	result = LRD_WF_GetIpV6Address(ipv6_names, &num_ips);
 	SDKUNLOCK(sdk_lock);
+	if(result!=SDCERR_SUCCESS){
+		free(ipv6_names);
+		return result;
+	}
 	flatbuffers_string_vec_ref_t flatc_ipnames[num_ips];
 
 	for (size_t i=0; i< num_ips; i++)
@@ -233,6 +246,85 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
+int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
+{
+	DCAL_VERSION_STRUCT versions = {0};
+	SDCERR result;
+	CF10G_STATUS status = {0};
+	unsigned long longsdk = 0;
+	int size = STR_SZ;
+
+	inline void remove_cr(char * str)
+	{
+		int i;
+		for (i=0; i<STR_SZ; i++)
+			if (str[i]==0xa)
+				str[i]=0;
+	}
+
+	SDKLOCK(sdk_lock);
+	result = GetCurrentStatus(&status);
+	if (result == SDCERR_SUCCESS)
+		result = GetSDKVersion(&longsdk);
+	if (result == SDCERR_SUCCESS)
+		result = LRD_WF_GetRadioChipSet(&versions.chipset);
+	if (result == SDCERR_SUCCESS)
+		result = LRD_WF_System_ID(&versions.sys);
+	if (result == SDCERR_SUCCESS)
+		result = LRD_WF_GetFirmwareVersionString(versions.firmware, &size);
+	SDKUNLOCK(sdk_lock);
+	if (result)
+		return result;
+
+	versions.sdk = longsdk;
+	versions.dcas = DCAL_API_VERSION;
+	versions.driver = status.driverVersion;
+
+	FILE *in = popen( "sdcsupp -qv", "r");
+	if (in){
+		fgets(versions.supplicant, STR_SZ, in);
+		versions.supplicant[STR_SZ]=0;
+		pclose(in);
+	} else
+		strcpy(versions.supplicant, "none");
+
+	int sysfile = open ("/etc/laird-release", O_RDONLY);
+	if ((sysfile==-1) && (errno==ENOENT))
+		sysfile = open ("/etc/summit-release", O_RDONLY);
+	if (sysfile > 1){
+		read(sysfile, versions.release, STR_SZ);
+		versions.release[STR_SZ]=0;
+		close(sysfile);
+	}else
+		strcpy(versions.release, "unknown");
+
+/// have various versions - now build buffer
+	remove_cr(versions.supplicant);
+	remove_cr(versions.release);
+
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Version_type_identifier));
+	ns(Version_start(B));
+	ns(Version_sdk_add(B, versions.sdk));
+	ns(Version_chipset_add(B, versions.chipset));
+	ns(Version_sys_add(B, versions.sys));
+	ns(Version_driver_add(B, versions.driver));
+	ns(Version_dcas_add(B, versions.dcas));
+	ns(Version_firmware_create_str(B, versions.firmware));
+	ns(Version_supplicant_create_str(B, versions.supplicant));
+	ns(Version_release_create_str(B, versions.release));
+
+	ns(Version_end_as_root(B));
+
+
+	return 0;
+}
+
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
 int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
  pthread_mutex_t *sdk_lock)
 {
@@ -240,8 +332,10 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_GETSTATUS):
 			return build_status(B, sdk_lock);
 			break;
-//TODO - add other command processing
 		case ns(Commands_GETVERSION):
+			return build_version(B, sdk_lock);
+			break;
+//TODO - add other command processing
 		case ns(Commands_GETPROFILE):
 		case ns(Commands_SETPROFILE):
 		case ns(Commands_GETPROFILES):
