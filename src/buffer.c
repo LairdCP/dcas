@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -447,7 +448,6 @@ int do_activate_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mu
 {
 	ns(String_table_t) string;
 	int ret;
-printf("line: %d\n", __LINE__); sleep(1);
 	string = ns(Command_cmd_pl(cmd));
 
 	SDKLOCK(sdk_lock);
@@ -456,12 +456,25 @@ printf("line: %d\n", __LINE__); sleep(1);
 	build_handshake_ack(B, ns(Magic_ACK), ret);
 	return ret;
 }
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_issue_radiorestart(flatcc_builder_t *B, pthread_mutex_t * sdk_lock)
+{
+	int ret;
+	ret = system("ifrc wlan0 restart");
+	build_handshake_ack(B, ns(Magic_ACK), ret);
+	return ret;
+}
+
 //return codes:
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
 int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
- pthread_mutex_t *sdk_lock)
+ pthread_mutex_t *sdk_lock, bool *exit_called)
 {
 	switch(ns(Command_command(cmd))){
 		case ns(Commands_GETSTATUS):
@@ -475,13 +488,21 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			return do_enable_disable(B, sdk_lock,
 			          ns(Command_command(cmd))==ns(Commands_WIFIENABLE));
 			break;
-//TODO - add other command processing
 		case ns(Commands_SETPROFILE):
 			return do_set_profile(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_ACTIVATEPROFILE):
 			return do_activate_profile(B, cmd, sdk_lock);
 			break;
+		case ns(Commands_WIFIRESTART):
+			return do_issue_radiorestart(B, sdk_lock);
+			break;
+		case ns(Commands_SYSTEMREBOOT):
+			build_handshake_ack(B, ns(Magic_ACK), 0);
+			*exit_called = true;
+			return 0;
+			break;
+//TODO - add other command processing
 		case ns(Commands_GETPROFILE):
 		case ns(Commands_GETPROFILES):
 			return SDCERR_NOT_IMPLEMENTED;
@@ -497,7 +518,7 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 // unrecoverable and the session should be ended.  An error in with the
 // contents of the buffer are handled by putting a NACK in the return buffer
 
-int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake)
+int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called)
 {
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
@@ -535,7 +556,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			break;
 		case ns(Command_type_hash):
 			// process command
-			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock))){
+			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock, exit_called))){
 				// un-recoverable errors will be negative
 				if (ret > 0)
 					goto respond_with_nack;

@@ -4,16 +4,17 @@
 #include <semaphore.h>
 #include <errno.h>
 #include <assert.h>
+#include <signal.h>
 #define __USE_POSIX199309
 #include <time.h>
 
 #include "debug.h"
-#include "ssh_server.h"
 #include "buffer.h"
 
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 #include <libssh/callbacks.h>
+#include "ssh_server.h"
 
 #define SSHD_USER "libssh"
 #define SSHD_PASSWORD "libssh"
@@ -32,6 +33,7 @@ struct THREAD_LIST{
 struct DISPATCH_DATA {
 	ssh_session session;
 	bool *alive;
+	bool *exit_called;
 	pthread_mutex_t sdk_lock;
 	sem_t thread_init; // used between dispatcher and thread to know when
 	                   // safe to reuse dispatcher's stack variable
@@ -148,12 +150,13 @@ void * ssh_session_thread( void *param )
 	char buf[BUFSIZE];
 	int auth=0;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
-	bool *alive;
+	bool *alive, *exit_called;
 	ssh_session session;
 	size_t nwritten;
 	int nbytes;
 
 	alive = dispatch_data->alive;     //read only. Only set by dispatch or signal catch
+	exit_called = dispatch_data->exit_called;
 	session = dispatch_data->session; //we will be responsible for session now
 	dispatch_data->session = NULL;    //ensure no other thread points to this
 	sem_post(&dispatch_data->thread_init);  // signal dispatch routine thread
@@ -210,7 +213,7 @@ void * ssh_session_thread( void *param )
 		if(nbytes>0) {
 			DBGINFO("Got %d bytes from client:\n", nbytes);
 
-			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake);
+			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake, exit_called);
 
 			if (nbytes<0){
 				DBGERROR("error in process_bufer(): %d\n", nbytes);
@@ -232,7 +235,10 @@ void * ssh_session_thread( void *param )
 			continue;
 	} while ((nbytes>0) && (*alive));
 
-	DBGDEBUG("Read thread exiting due to EOF on channel\n");
+	if (*exit_called)
+		DBGINFO("system restart requested\n");
+	else
+		DBGDEBUG("Read thread exiting due to EOF on channel\n");
 
 exit_channel:
 	if (chan)
@@ -246,6 +252,8 @@ exit_session:
 	add_thread_to_completed_list( &dispatch_data->completed,
 	                               pthread_self());
 	sem_post(dispatch_data->thread_list);
+	if (*exit_called)
+		kill(getpid(), SIGINT);
 	DBGDEBUG("thread exiting\n");
 	return NULL;
 }
@@ -265,7 +273,7 @@ int check_with_timeout( int return_value, int test_value,
 
 int run_sshserver( struct SSH_DATA *ssh_data )
 {
-	ssh_bind sshbind;
+	ssh_bind *sshbind = &ssh_data->sshbind;
 	int i,r;
 	char key_tmp[MAX_PATH];
 	pthread_t child;
@@ -294,26 +302,29 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	}
 
 	dispatch_data.alive = &ssh_data->alive;
+	dispatch_data.exit_called = &ssh_data->reboot_on_exit;
+
 	dispatch_data.thread_list = &ssh_data->thread_list;
 	dispatch_data.completed.head = NULL;
 
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
 
-	sshbind=ssh_bind_new();
+	*sshbind=ssh_bind_new();
 
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
+
+	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
+	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
 
 	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
 	strncat(key_tmp, "/ssh_host_dsa_key", MAX_PATH);
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
+	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
 	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
 	strncat(key_tmp, "/ssh_host_rsa_key", MAX_PATH);
-	ssh_bind_options_set(sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
+	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
 
-	if(ssh_bind_listen(sshbind)<0) {
-		DBGERROR("Error listening to socket: %s\n", ssh_get_error(sshbind));
+	if(ssh_bind_listen(*sshbind)<0) {
+		DBGERROR("Error listening to socket: %s\n", ssh_get_error(*sshbind));
 		r = 1;
 		goto cleanup;
 	}
@@ -330,12 +341,12 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 		empty_completed_thread_list(&dispatch_data.completed);
 
 		dispatch_data.session = ssh_new();
-		r = ssh_bind_accept(sshbind, dispatch_data.session);
+		r = ssh_bind_accept(*sshbind, dispatch_data.session);
 
 		if(r==SSH_ERROR) {
 			//TODO - determine if we should stay running or exit the application
 			if (ssh_data->alive)
-				DBGERROR("Error accepting a connection: %s\n", ssh_get_error(sshbind));
+				DBGERROR("Error accepting a connection: %s\n", ssh_get_error(*sshbind));
 			ssh_free(dispatch_data.session);
 			dispatch_data.session = NULL;
 			continue;
@@ -357,10 +368,16 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	empty_completed_thread_list(&dispatch_data.completed);
 
 cleanup:
-	ssh_bind_free(sshbind);
+		ssh_bind_free(*sshbind);
 	ssh_finalize();
 	pthread_mutex_destroy(&(dispatch_data.sdk_lock));
 	pthread_mutex_destroy(&dispatch_data.completed.lock);
 
+	if (*dispatch_data.exit_called){
+		// call system's reboot command rather then reboot API directly as the system version may do additional syncing.
+		//TODO - we may only want to support this on WBs rather then all
+		printf("***** calling reboot *****\n");
+		system("reboot");
+	}
 	return r;
 }

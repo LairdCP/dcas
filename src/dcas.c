@@ -4,8 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <unistd.h> //only needed for sleep prior to exit
-
+#include <libssh/server.h>
 #include "debug.h"
 #include "version.h"
 #include "ssh_server.h"
@@ -19,6 +18,7 @@ static char * runtime_name = "";
 
 static struct SSH_DATA ssh_data = {
 	.alive = true,
+	.reboot_on_exit = false,
 	.port = 2222,
 	.verbosity = 0,
 };

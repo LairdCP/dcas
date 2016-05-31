@@ -8,10 +8,12 @@
 
 struct SSH_DATA {
 	bool alive;
+	bool reboot_on_exit;
 	char keys_folder[MAX_PATH];
 	unsigned int port;
 	int verbosity;
 	sem_t thread_list;
+	ssh_bind sshbind;
 };
 
 int run_sshserver( struct SSH_DATA *);

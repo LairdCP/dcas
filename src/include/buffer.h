@@ -12,6 +12,7 @@
 //an error.  Since we always send an ACK or NACK if no unrecoverable error,
 //we should never return a value 0.
 int process_buffer(char * buf, size_t buf_size, size_t nbytes,
-                   pthread_mutex_t *sdk_lock, bool must_be_handshake);
+                   pthread_mutex_t *sdk_lock, bool must_be_handshake,
+                   bool *exit_called);
 
 #endif //__buffer_h__

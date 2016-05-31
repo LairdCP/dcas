@@ -122,7 +122,10 @@ enum Commands:uint {
 	GETPROFILES,
 	ACTIVATEPROFILE,
 	WIFIENABLE,
-	WIFIDISABLE }
+	WIFIDISABLE,
+	WIFIRESTART,
+	SYSTEMREBOOT,
+	}
 
 table Command {
 	command:Commands;
