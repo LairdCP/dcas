@@ -58,17 +58,16 @@ To build:
 
     make -f wb-external.mk clean
     make -f wb-external.mk WB=wb45n_devel
+--or--
+    make -f wb-external.mk clean
+    make -f wb-external.mk WB=wb50n_devel
 
 TODO:
 -----
 
 ### DCAS ###
 
-* Proper server architecture, robustness, expandable
-
-### Build system ###
-
-* Integrate into buildroot WB buildsystem
+* add additional functionality to complete API
 
 ### Tests ###
 
