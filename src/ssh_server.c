@@ -1,9 +1,11 @@
+#define _POSIX_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <semaphore.h>
 #include <errno.h>
 #include <assert.h>
+#include <sys/types.h>
 #include <signal.h>
 #define __USE_POSIX199309
 #include <time.h>
