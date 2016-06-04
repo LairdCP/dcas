@@ -251,11 +251,19 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 //negative value - unrecoverable error
 int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 {
-	DCAL_VERSION_STRUCT versions = {0};
 	SDCERR result;
 	CF10G_STATUS status = {0};
 	unsigned long longsdk = 0;
 	int size = STR_SZ;
+	RADIOCHIPSET chipset;
+	LRD_SYSTEM sys;
+	int sdk;
+	unsigned int driver;
+	unsigned int dcas;
+	unsigned int dcal;
+	char firmware[STR_SZ];
+	char supplicant[STR_SZ];
+	char release[STR_SZ];
 
 	inline void remove_cr(char * str)
 	{
@@ -270,52 +278,52 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	if (result == SDCERR_SUCCESS)
 		result = GetSDKVersion(&longsdk);
 	if (result == SDCERR_SUCCESS)
-		result = LRD_WF_GetRadioChipSet(&versions.chipset);
+		result = LRD_WF_GetRadioChipSet(&chipset);
 	if (result == SDCERR_SUCCESS)
-		result = LRD_WF_System_ID(&versions.sys);
+		result = LRD_WF_System_ID(&sys);
 	if (result == SDCERR_SUCCESS)
-		result = LRD_WF_GetFirmwareVersionString(versions.firmware, &size);
+		result = LRD_WF_GetFirmwareVersionString(firmware, &size);
 	SDKUNLOCK(sdk_lock);
 	if (result)
 		return result;
 
-	versions.sdk = longsdk;
-	versions.dcas = DCAL_API_VERSION;
-	versions.driver = status.driverVersion;
+	sdk = longsdk;
+	dcas = DCAL_API_VERSION;
+	driver = status.driverVersion;
 
 	FILE *in = popen( "sdcsupp -qv", "r");
 	if (in){
-		fgets(versions.supplicant, STR_SZ, in);
-		versions.supplicant[STR_SZ-1]=0;
+		fgets(supplicant, STR_SZ, in);
+		supplicant[STR_SZ-1]=0;
 		pclose(in);
 	} else
-		strcpy(versions.supplicant, "none");
+		strcpy(supplicant, "none");
 
 	int sysfile = open ("/etc/laird-release", O_RDONLY);
 	if ((sysfile==-1) && (errno==ENOENT))
 		sysfile = open ("/etc/summit-release", O_RDONLY);
 	if (sysfile > 1){
-		read(sysfile, versions.release, STR_SZ);
-		versions.release[STR_SZ-1]=0;
+		read(sysfile, release, STR_SZ);
+		release[STR_SZ-1]=0;
 		close(sysfile);
 	}else
-		strcpy(versions.release, "unknown");
+		strcpy(release, "unknown");
 
 /// have various versions - now build buffer
-	remove_cr(versions.supplicant);
-	remove_cr(versions.release);
+	remove_cr(supplicant);
+	remove_cr(release);
 
 	flatcc_builder_reset(B);
 	flatbuffers_buffer_start(B, ns(Version_type_identifier));
 	ns(Version_start(B));
-	ns(Version_sdk_add(B, versions.sdk));
-	ns(Version_chipset_add(B, versions.chipset));
-	ns(Version_sys_add(B, versions.sys));
-	ns(Version_driver_add(B, versions.driver));
-	ns(Version_dcas_add(B, versions.dcas));
-	ns(Version_firmware_create_str(B, versions.firmware));
-	ns(Version_supplicant_create_str(B, versions.supplicant));
-	ns(Version_release_create_str(B, versions.release));
+	ns(Version_sdk_add(B, sdk));
+	ns(Version_chipset_add(B, chipset));
+	ns(Version_sys_add(B, sys));
+	ns(Version_driver_add(B, driver));
+	ns(Version_dcas_add(B, dcas));
+	ns(Version_firmware_create_str(B, firmware));
+	ns(Version_supplicant_create_str(B, supplicant));
+	ns(Version_release_create_str(B, release));
 
 	ns(Version_end_as_root(B));
 

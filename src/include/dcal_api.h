@@ -45,6 +45,7 @@ typedef enum _DCAL_ERR{
 	DCAL_FLATBUFF_ERROR,
 	DCAL_FLATCC_NOT_INITIALIZED,
 	DCAL_FLATBUFF_VALIDATION_FAIL,
+	DCAL_DATA_STALE,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -58,38 +59,9 @@ typedef void * laird_profile_handle;
 #define NAME_SZ 48
 #define SSID_SZ 32
 
-typedef struct _laird_status_struct {
-	unsigned int cardState;
-	char ProfileName[NAME_SZ];
-	char ssid[SSID_SZ]; //32 characters.  Can contain non-ascii characters.  Not necessarily NULL terminated. Use ssid_len to access data.
-	unsigned int ssid_len;
-	unsigned int channel;
-	int rssi;
-	char clientName[NAME_SZ];
-	unsigned char mac[MAC_SZ];
-	unsigned char ipv4[IP4_SZ];
-	char ipv6[IP6_STR_SZ];
-	unsigned char ap_mac[MAC_SZ];
-	unsigned char ap_ip[MAC_SZ];
-	char ap_name[NAME_SZ];
-	unsigned int bitRate;
-	unsigned int txPower;
-	unsigned int dtim;
-	unsigned int beaconPeriod;
-} DCAL_STATUS_STRUCT;
-
 #define STR_SZ 80
-typedef struct _laird_version_struct {
-	unsigned int sdk;
-	RADIOCHIPSET chipset;
-	LRD_SYSTEM sys;
-	unsigned int driver;
-	unsigned int dcas;
-	unsigned int dcal;
-	char firmware[STR_SZ];
-	char supplicant[STR_SZ];
-	char release[STR_SZ];
-} DCAL_VERSION_STRUCT;
+
+
 
 // API session management
 
@@ -103,10 +75,40 @@ int dcal_session_open ( laird_session_handle session );
 int dcal_session_close( laird_session_handle session);
 
 // Device Versions
-int dcal_device_version( laird_session_handle session, DCAL_VERSION_STRUCT * version_struct);
+int dcal_device_version_pull( laird_session_handle session,
+                              unsigned int *sdk,
+                              RADIOCHIPSET *chipset,
+                              LRD_SYSTEM *sys,
+                              unsigned int *driver,
+                              unsigned int *dcas,
+                              unsigned int *dcal,
+                              char *firmware,
+                              char *supplicant,
+                              char *release
+);
 
 // Device Status
-int dcal_device_status( laird_session_handle session, DCAL_STATUS_STRUCT * status_struct);
+int dcal_device_status_pull( laird_session_handle session);
+int dcal_device_status_get_settings( laird_session_handle session,
+                                     char * profilename,
+                                     char * ssid,
+                                     unsigned int * ssid_len,
+                                     char * clientname);
+int dcal_device_status_get_connection( laird_session_handle session,
+                                       unsigned int * cardstate,
+                                       unsigned int * channel,
+                                       int * rssi,
+                                       unsigned char *mac,
+                                       unsigned char *ipv4,
+                                       char *ipv6,
+                                       unsigned char *ap_mac,
+                                       unsigned char *ap_ip,
+                                       char *ap_name,
+                                       unsigned int *bitrate,
+                                       unsigned int *txpower,
+                                       unsigned int *dtim,
+                                       unsigned int *beaconperiod);
+int dcal_device_status_get_cache_timeout( unsigned int *timeout);
 
 // WiFi Management
 int dcal_wifi_enable( laird_session_handle session);
@@ -263,7 +265,10 @@ int dcal_wifi_profile_get_profile( laird_profile_handle profile,
 
 void dcal_wifi_profile_printf( laird_profile_handle profile);
 
-// interesting stuff
+// system controls
+
+int dcal_wifi_restart( laird_session_handle session);
+int dcal_system_restart( laird_session_handle session);
 
 const char *dcal_err_to_string( int code);
 
