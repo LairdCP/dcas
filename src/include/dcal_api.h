@@ -21,14 +21,13 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "version.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "sdc_sdk_legacy.h"
-
-#define DCAL_API_VERSION 0x01010101
 
 typedef enum _DCAL_ERR{
 	DCAL_SUCCESS = 0,
@@ -61,8 +60,6 @@ typedef void * laird_profile_handle;
 
 #define STR_SZ 80
 
-
-
 // API session management
 
 int dcal_session_create( laird_session_handle * session);
@@ -75,40 +72,59 @@ int dcal_session_open ( laird_session_handle session );
 int dcal_session_close( laird_session_handle session);
 
 // Device Versions
-int dcal_device_version_pull( laird_session_handle session,
-                              unsigned int *sdk,
-                              RADIOCHIPSET *chipset,
-                              LRD_SYSTEM *sys,
-                              unsigned int *driver,
-                              unsigned int *dcas,
-                              unsigned int *dcal,
-                              char *firmware,
-                              char *supplicant,
-                              char *release
-);
+
+int dcal_get_sdk_version(laird_session_handle session, unsigned int *sdk);
+int dcal_get_chipset_version(laird_session_handle session,
+                              RADIOCHIPSET *chipset);
+int dcal_get_system_version(laird_session_handle session,
+                              LRD_SYSTEM *sys);
+int dcal_get_driver_version(laird_session_handle session,
+                              unsigned int *driver);
+int dcal_get_dcas_version(laird_session_handle session,
+                              unsigned int *dcas);
+int dcal_get_dcal_version(laird_session_handle session,
+                              unsigned int *dcal);
+int dcal_get_firmware_version(laird_session_handle session,
+                              char *firmware);
+int dcal_get_supplicant_version(laird_session_handle session,
+                              char *supplicant);
+int dcal_get_release_version(laird_session_handle session,
+                              char *release);
 
 // Device Status
 int dcal_device_status_pull( laird_session_handle session);
+
+// things that are fairly static
 int dcal_device_status_get_settings( laird_session_handle session,
                                      char * profilename,
                                      char * ssid,
                                      unsigned int * ssid_len,
-                                     char * clientname);
+                                     unsigned char *mac);
+// things that are ccx related
+int dcal_device_status_get_ccx( laird_session_handle session,
+                                       unsigned char *ap_ip,
+                                       char *ap_name,
+                                       char * clientname);
+// tcp stack related
+int dcal_device_status_get_tcp( laird_session_handle session,
+                                       unsigned char *ipv4,
+                                       char *ipv6);
+
+// things that could change moment to moment
 int dcal_device_status_get_connection( laird_session_handle session,
                                        unsigned int * cardstate,
                                        unsigned int * channel,
                                        int * rssi,
-                                       unsigned char *mac,
-                                       unsigned char *ipv4,
-                                       char *ipv6,
-                                       unsigned char *ap_mac,
-                                       unsigned char *ap_ip,
-                                       char *ap_name,
+                                       unsigned char *ap_mac);
+
+int dcal_device_status_get_connection_extended( laird_session_handle session,
                                        unsigned int *bitrate,
                                        unsigned int *txpower,
                                        unsigned int *dtim,
                                        unsigned int *beaconperiod);
 int dcal_device_status_get_cache_timeout( unsigned int *timeout);
+
+
 
 // WiFi Management
 int dcal_wifi_enable( laird_session_handle session);
@@ -128,6 +144,8 @@ int dcal_wifi_profile_push( laird_session_handle session,
 int dcal_wifi_profile_activate( laird_session_handle sesion,
                                      laird_profile_handle profile);
 int dcal_wifi_profile_activate_by_name( laird_session_handle session,
+                                          char * profile_name);
+int dcal_wifi_profile_delete_from_device( laird_session_handle session,
                                           char * profile_name);
 
 int dcal_wifi_profile_set_profilename(laird_profile_handle profile,
@@ -178,48 +196,48 @@ int dcal_wifi_profile_get_eap( laird_profile_handle profile,
 
 int dcal_wifi_profile_set_psk( laird_profile_handle profile,
                                     char * psk);
-int dcal_wifi_profile_get_psk( laird_profile_handle profile,
-                                    char * psk_buffer);
+int dcal_wifi_profile_psk_is_set( laird_profile_handle profile,
+                                    bool * psk);
 
 int dcal_wifi_profile_set_user( laird_profile_handle profile,
                                      char * user);
-int dcal_wifi_profile_get_user( laird_profile_handle profile,
-                                     char * user_buffer);
+int dcal_wifi_profile_user_is_set( laird_profile_handle profile,
+                                     bool * user);
 
 int dcal_wifi_profile_set_password( laird_profile_handle profile,
                                          char * password);
-int dcal_wifi_profile_get_password( laird_profile_handle profile,
-                                         char * password_buffer);
+int dcal_wifi_profile_password_is_set( laird_profile_handle profile,
+                                         bool * password);
 
 int dcal_wifi_profile_set_cacert( laird_profile_handle profile,
                                        char * cacert);
-int dcal_wifi_profile_get_cacert( laird_profile_handle profile,
-                                       char * cacert_buffer);
+int dcal_wifi_profile_cacert_is_set( laird_profile_handle profile,
+                                       bool * cacert);
 
 int dcal_wifi_profile_set_pacfile( laird_profile_handle profile,
                                  char * pacfilename);
-int dcal_wifi_profile_get_pacfile( laird_profile_handle profile,
-                                 char * pacfilename_buffer);
+int dcal_wifi_profile_pacfile_is_set( laird_profile_handle profile,
+                                 bool * pacfilename);
 
 int dcal_wifi_profile_set_pacpassword( laird_profile_handle profile,
                                  char * pacpassword);
-int dcal_wifi_profile_get_pacpassword( laird_profile_handle profile,
-                                 char * pacpassword_buffer);
+int dcal_wifi_profile_pacpassword_is_set( laird_profile_handle profile,
+                                 bool * pacpassword_buffer);
 
 int dcal_wifi_profile_set_usercert( laird_profile_handle profile,
                                  char * usercert);
-int dcal_wifi_profile_get_usercert( laird_profile_handle profile,
-                                 char * usercert_buffer);
+int dcal_wifi_profile_usercert_is_set( laird_profile_handle profile,
+                                 bool * usercert);
 
 int dcal_wifi_profile_set_usercert_password( laird_profile_handle profile,
                                  char * usercert_password);
-int dcal_wifi_profile_get_usercert_password( laird_profile_handle profile,
-                                 char * usercert_password_buffer);
+int dcal_wifi_profile_usercert_password_is_set( laird_profile_handle profile,
+                                 bool * usercert_password);
 
 int dcal_wifi_profile_set_wep_key( laird_profile_handle profile,
                                  char * wepkey, int index);
-int dcal_wifi_profile_get_wep_key( laird_profile_handle profile,
-                                 char * wepkey_buffer, int index);
+int dcal_wifi_profile_wep_key_is_set( laird_profile_handle profile,
+                                 bool * wepkey, int index);
 
 int dcal_wifi_profile_set_wep_txkey( laird_profile_handle profile,
                                  unsigned int txkey);
