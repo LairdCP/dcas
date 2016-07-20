@@ -79,8 +79,14 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
-		case ns(Profiles_type_hash):
-			if(ns(Profiles_verify_as_root(buf,size))){
+		case ns(P_entry_type_hash):
+			if(ns(P_entry_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
+		case ns(Profile_list_type_hash):
+			if(ns(Profile_verify_as_root(buf,size))){
 				DBGERROR("%s: unable to verify buffer\n", __func__);
 				ret = 0;
 				}
@@ -116,8 +122,11 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 		case ns(Profile_type_hash):
 			return "Profile";
 			break;
-		case ns(Profiles_type_hash):
-			return "Profiles";
+		case ns(P_entry_type_hash):
+			return "Profile list entry";
+			break;
+		case ns(Profile_list_type_hash):
+			return "Profile list";
 			break;
 
 		default:
@@ -148,13 +157,18 @@ int is_handshake_valid( ns(Handshake_table_t) handshake)
 	return 0;
 }
 
-int build_handshake_ack(flatcc_builder_t *B, ns(Magic_enum_t) res_code, unsigned int error)
+int build_handshake_ack(flatcc_builder_t *B, unsigned int error)
 {
 	flatcc_builder_reset(B);
 	flatbuffers_buffer_start(B, ns(Handshake_type_identifier));
 	ns(Handshake_start(B));
 	ns(Handshake_server_add(B, true));
-	ns(Handshake_magic_add(B, res_code));
+
+	if (error)
+		ns(Handshake_magic_add(B, ns(Magic_NACK)));
+	else
+		ns(Handshake_magic_add(B, ns(Magic_ACK)));
+
 	//TODO - do we want our ip address in the handshake from server?  If so
 	//we need to get from the ssh session somehow so we know what interface
 	//Could have it included by default in process_buffer call
@@ -191,9 +205,10 @@ int build_status(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	result = LRD_WF_GetSSID(&ssid);
 	SDKUNLOCK(sdk_lock);
 	if (result!=SDCERR_SUCCESS){
-		DBGERROR("LRD_WF_GetSSID() failed with %d\n", result);
-		// there are conditions such as disabled where this could fail and we
-		// don't want to abort sending back status, so no return here.
+		// there are conditions such as disabled where this could fail
+		// and we don't want to abort sending back status, so no return
+		// here - just log it.
+		DBGINFO("LRD_WF_GetSSID() failed with %d\n", result);
 	}
 
 // only dealing with client mode for now
@@ -327,7 +342,6 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 
 	ns(Version_end_as_root(B));
 
-
 	return 0;
 }
 
@@ -348,7 +362,7 @@ int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enabl
 	if (result != SDCERR_SUCCESS)
 		return result;
 
-	build_handshake_ack(B, ns(Magic_ACK), 0);
+	build_handshake_ack(B, 0);
 	return 0;
 }
 
@@ -373,6 +387,7 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	SDCConfig config = {{0}};
 	int ret;
 
+	//TODO we ought to do some assertion that the cmd_table is a profile
 	profile = ns(Command_cmd_pl(cmd));
 
 	strncpy(config.configName, ns(Profile_name(profile)), CONFIG_NAME_SZ);
@@ -395,14 +410,14 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 		case WEP_ON:
 		case WEP_AUTO:
 			ret = SetMultipleWEPKeys( &config, ns(Profile_weptxkey(profile)),
-			                      weplen(ns(Profile_security1(profile))),
-			                      (unsigned char*)ns(Profile_security1(profile)),
-			                      weplen(ns(Profile_security2(profile))),
-			                      (unsigned char*)ns(Profile_security2(profile)),
-			                      weplen(ns(Profile_security3(profile))),
-			                      (unsigned char*)ns(Profile_security3(profile)),
-			                      weplen(ns(Profile_security4(profile))),
-			                      (unsigned char*)ns(Profile_security4(profile)));
+			                weplen(ns(Profile_security1(profile))),
+			                (unsigned char*)ns(Profile_security1(profile)),
+			                weplen(ns(Profile_security2(profile))),
+			                (unsigned char*)ns(Profile_security2(profile)),
+			                weplen(ns(Profile_security3(profile))),
+			                (unsigned char*)ns(Profile_security3(profile)),
+			                weplen(ns(Profile_security4(profile))),
+			                (unsigned char*)ns(Profile_security4(profile)));
 			break;
 
 		case WPA_PSK:
@@ -427,14 +442,17 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 				case EAP_EAPTTLS:
 				case EAP_PEAPMSCHAP:
 				case EAP_PEAPGTC:
-					SetPEAPGTCCred(&config, user(profile), password(profile), CERT_FILE, cacert(profile));
+					SetPEAPGTCCred(&config, user(profile), password(profile),
+					               CERT_FILE, cacert(profile));
 					break;
 				case EAP_EAPFAST:
-					SetEAPFASTCred(&config, user(profile), password(profile), pacfilename(profile), pacpassword(profile));
+					SetEAPFASTCred(&config, user(profile), password(profile),
+					               pacfilename(profile), pacpassword(profile));
 					break;
 				case EAP_EAPTLS:
 				case EAP_PEAPTLS:
-					SetEAPTLSCred(&config, user(profile), usercert(profile), CERT_FILE, cacert(profile));
+					SetEAPTLSCred(&config, user(profile), usercert(profile),
+					              CERT_FILE, cacert(profile));
 				break;
 			}
 	}
@@ -444,8 +462,96 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	if (ret==SDCERR_INVALID_NAME)
 		ret = ModifyConfig(config.configName, &config);
 	SDKUNLOCK(sdk_lock);
-	build_handshake_ack(B, ns(Magic_ACK), ret);
+	build_handshake_ack(B, ret);
 	return ret;
+}
+
+SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+// verify paramters
+// get config
+// if invalid
+// 	make nak with error
+// 	return buffer
+// make buffer from profile
+// return buffer
+
+	ns(String_table_t) profile_name;
+	SDCConfig config = {{0}};
+	int ret;
+	unsigned char apStatus = 0;
+
+	//TODO we ought to do some assertion that the cmd_table is a string
+	profile_name = ns(Command_cmd_pl(cmd));
+
+	ret = GetConfig((char*) ns(String_value(profile_name)), &config);
+	
+	if (ret)
+		build_handshake_ack(B, ret);
+	else
+	{
+		flatcc_builder_reset(B);
+		flatbuffers_buffer_start(B, ns(Profile_type_identifier));
+		ns(Profile_start(B));
+
+		ns(Profile_name_create_str(B, config.configName));
+		ns(Profile_name_create_str(B, config.SSID));
+		ns(Profile_client_name_create_str(B, config.clientName));
+		ns(Profile_txPwr_add(B, config.txPower));
+		ns(Profile_pwrsave_add(B, config.powerSave&&0xff));
+		ns(Profile_pspDelay_add(B, (config.powerSave >>16)&&0xff));
+		ns(Profile_weptype_add(B, config.wepType));
+		ns(Profile_auth_add(B, config.authType));
+		ns(Profile_eap_add(B, config.eapType));
+		ns(Profile_bitrate_add(B, config.bitRate));
+		ns(Profile_radiomode_add(B, config.radioMode));
+//		ns(Profile_weptxkey_add(B, config->txkey));
+		LRD_WF_AutoProfileCfgStatus((char*) ns(String_value(profile_name)), &apStatus);
+//		ns(Profile_autoprofile_add(B, apStatus));
+#if 0
+		ns(Profile_security1_create_str(B, config->security1));
+		ns(Profile_security2_create_str(B, config->security2));
+		ns(Profile_security3_create_str(B, config->security3));
+		ns(Profile_security4_create_str(B, config->security4));
+		ns(Profile_security5_create_str(B, config->security5));
+#endif
+
+	ns(Profile_end_as_root(B));
+	}
+	return 0;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_del_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) profile_name;
+	int ret;
+
+	//TODO we ought to do some assertion that the cmd_table is a string
+	profile_name = ns(Command_cmd_pl(cmd));
+
+	ret = DeleteConfig((char*) ns(String_value(profile_name)));
+	
+	build_handshake_ack(B, ret);
+
+	return 0; // any error is already in ack/Nack
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_get_profile_list(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
+{
+	return SDCERR_NOT_IMPLEMENTED;
 }
 
 //return codes:
@@ -461,7 +567,8 @@ int do_activate_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mu
 	SDKLOCK(sdk_lock);
 	ret = ActivateConfig((char*)ns(String_value(string)));
 	SDKUNLOCK(sdk_lock);
-	build_handshake_ack(B, ns(Magic_ACK), ret);
+	build_handshake_ack(B, ret);
+
 	return ret;
 }
 
@@ -473,7 +580,7 @@ int do_issue_radiorestart(flatcc_builder_t *B, pthread_mutex_t * sdk_lock)
 {
 	int ret;
 	ret = system("ifrc wlan0 restart");
-	build_handshake_ack(B, ns(Magic_ACK), ret);
+	build_handshake_ack(B, ret);
 	return ret;
 }
 
@@ -486,45 +593,64 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 {
 	switch(ns(Command_command(cmd))){
 		case ns(Commands_GETSTATUS):
+			DBGDEBUG("Get Status\n");
 			return build_status(B, sdk_lock);
 			break;
-		case ns(Commands_GETVERSION):
+		case ns(Commands_GETVERSIONS):
+			DBGDEBUG("Get Version\n");
 			return build_version(B, sdk_lock);
 			break;
 		case ns(Commands_WIFIENABLE):
 		case ns(Commands_WIFIDISABLE):
+			DBGDEBUG("%s\n",
+			                ns(Command_command(cmd))==ns(Commands_WIFIENABLE)?
+			                "enable":"disable");
 			return do_enable_disable(B, sdk_lock,
 			          ns(Command_command(cmd))==ns(Commands_WIFIENABLE));
 			break;
 		case ns(Commands_SETPROFILE):
+			DBGDEBUG("set profile\n");
 			return do_set_profile(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_ACTIVATEPROFILE):
+			DBGDEBUG("activate profile\n");
 			return do_activate_profile(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_WIFIRESTART):
+			DBGDEBUG("wifi restart\n");
 			return do_issue_radiorestart(B, sdk_lock);
 			break;
 		case ns(Commands_SYSTEMREBOOT):
-			build_handshake_ack(B, ns(Magic_ACK), 0);
+			DBGDEBUG("system reboot\n");
+			build_handshake_ack(B, 0);
 			*exit_called = true;
 			return 0;
 			break;
-//TODO - add other command processing
 		case ns(Commands_GETPROFILE):
-		case ns(Commands_GETPROFILES):
-			return SDCERR_NOT_IMPLEMENTED;
+			DBGDEBUG("Get profile\n");
+			return do_get_profile(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_DELPROFILE):
+			DBGDEBUG("Del profile\n");
+			return do_del_profile(B, cmd, sdk_lock);
+			break;
+//TODO - add other command processing
+		case ns(Commands_GETPROFILELIST):
+			return do_get_profile_list(B, sdk_lock);
+			break;
 		default:
-			return 0;
+			return SDCERR_NOT_IMPLEMENTED;
 	}
 }
 
-// the passed in buffer is used for the outbound buffer as well.  The buffer
-// size is buf_size while the number of bytes used for inbound is nbytes
-// the number of bytes used in the outbound buffer is the return code.
-// However, if the return is negative, this is an error that is
-// unrecoverable and the session should be ended.  An error in with the
-// contents of the buffer are handled by putting a NACK in the return buffer
+// the passed in buffer is used for the outbound buffer as well.  The
+// buffer size is buf_size while the number of bytes used for inbound
+// is nbytes, the number of bytes used in the outbound buffer is the
+// return code. However, if the return is negative, this is an error
+// that is unrecoverable and the session should be ended. (The buffer's
+// content on a unrecoverable error is undefined.) A
+// recoverable error is handled by putting a NACK in the return buffer
+// and the error in the returned handshake table
 
 int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called)
 {
@@ -555,7 +681,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			DBGINFO("inbound handshake buffer received\n");
 			if (is_handshake_valid(ns(Handshake_as_root(buf)))) {
 				DBGINFO("Got good protocol HELLO\n");
-				build_handshake_ack(&builder, ns(Magic_ACK), 0);
+				build_handshake_ack(&builder, 0);
 				goto respond_normal;
 			}
 			// not a valid handshake - respond with nack
@@ -582,7 +708,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 	}
 
 respond_with_nack:
-	build_handshake_ack(&builder, ns(Magic_NACK), ret);
+	build_handshake_ack(&builder, ret);
 respond_normal:
 	flatcc_builder_copy_buffer(&builder, buf, buf_size);
 	nbytes =flatcc_builder_get_buffer_size(&builder);

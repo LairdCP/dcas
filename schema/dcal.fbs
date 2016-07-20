@@ -105,21 +105,27 @@ table Profile {
 	weptxkey:uint;
 }
 
-table Profiles {
-	profiles:[Profile];
+table P_entry {
+	name:string;
+	active:bool = false;
+	autoprof:bool = false;
+}
+
+table Profile_list {
+	profiles:[P_entry];
 }
 
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, Profiles, U32, String }
+union Cmd_pl { Globals, Profile, U32, String }
 
 enum Commands:uint {
 	INVALID =0,
-	GETVERSION,
+	GETVERSIONS,
 	GETSTATUS,
 	GETPROFILE,
 	SETPROFILE,
 	DELPROFILE,
-	GETPROFILES,
+	GETPROFILELIST,
 	ACTIVATEPROFILE,
 	WIFIENABLE,
 	WIFIDISABLE,

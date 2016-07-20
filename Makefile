@@ -136,6 +136,7 @@ libssh_install: $(LIBSSH_TARGET)
 
 lib.local/flatcc/lib/libflatcc.a : lib.local/flatcc
 	cd lib.local/flatcc && git checkout v0.3.3
+	cp lib.local/flatcc/scripts/build.cfg.make lib.local/flatcc/scripts/build.cfg
 	cd lib.local/flatcc && ./scripts/build.sh
 
 lib.local/flatcc : lib
