@@ -432,15 +432,17 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 			break;
 		default:
 			switch(config.eapType){
-				case EAP_NONE:
-				case EAP_WAPI_CERT:
-					// do nothing
-					break;
 				case EAP_LEAP:
 					SetLEAPCred(&config, user(profile), password(profile));
 					break;
 				case EAP_EAPTTLS:
+					SetEAPTTLSCred(&config, user(profile), password(profile),
+					                CERT_FILE, cacert(profile));
+					break;
 				case EAP_PEAPMSCHAP:
+					SetPEAPMSCHAPCred(&config, user(profile), password(profile),
+					               CERT_FILE, cacert(profile));
+					break;
 				case EAP_PEAPGTC:
 					SetPEAPGTCCred(&config, user(profile), password(profile),
 					               CERT_FILE, cacert(profile));
@@ -450,11 +452,20 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 					               pacfilename(profile), pacpassword(profile));
 					break;
 				case EAP_EAPTLS:
-				case EAP_PEAPTLS:
 					SetEAPTLSCred(&config, user(profile), usercert(profile),
 					              CERT_FILE, cacert(profile));
-				break;
+					break;
+				case EAP_PEAPTLS:
+					SetPEAPTLSCred(&config, user(profile), usercert(profile),
+					              CERT_FILE, cacert(profile));
+					break;
+				case EAP_NONE:
+				case EAP_WAPI_CERT:
+				default:
+					// do nothing
+					break;
 			}
+			break;
 	}
 
 	SDKLOCK(sdk_lock);
@@ -510,8 +521,7 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 			case WEP_AUTO:
 			case WEP_CKIP:
 			case WEP_AUTO_CKIP:
-			case WPA_TKIP:
-			case WPA2_AES:{
+			{
 				unsigned char key[4][26];
 				WEPLEN klen[4];
 				int txkey;
@@ -543,16 +553,18 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 						GetEAPFASTCred(&config, user, pw, pacfn, pacpw);
 					break;
 					case EAP_PEAPMSCHAP:
-						GetPEAPGTCCred(&config, user, pw, NULL, cacert);
+						GetPEAPMSCHAPCred(&config, user, pw, NULL, cacert);
 					break;
 					case EAP_EAPTLS:
 						GetEAPTLSCred(&config, user, usercert, NULL, cacert);
 					break;
 					case EAP_EAPTTLS:
 						GetEAPTTLSCred(&config, user, usercert, NULL, cacert);
+						GetUserCertPassword(&config, usercrtpw);
 					break;
 					case EAP_PEAPTLS:
 						GetPEAPTLSCred(&config, user, usercert, NULL, cacert);
+						GetUserCertPassword(&config, usercrtpw);
 					break;
 					case EAP_LEAP:
 						GetLEAPCred(&config, user, pw);
@@ -563,7 +575,6 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 					default:
 						GetPSK(&config, psk);
 				}
-				GetUserCertPassword(&config, usercrtpw);
 
 				if (strlen(psk) || strlen(user))
 					ns(Profile_security1_create_str(B, "1"));
