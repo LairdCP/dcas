@@ -473,14 +473,6 @@ SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
 //negative value - unrecoverable error
 int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
 {
-// verify paramters
-// get config
-// if invalid
-// 	make nak with error
-// 	return buffer
-// make buffer from profile
-// return buffer
-
 	ns(String_table_t) profile_name;
 	SDCConfig config = {{0}};
 	int ret;
@@ -500,26 +492,96 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 		ns(Profile_start(B));
 
 		ns(Profile_name_create_str(B, config.configName));
-		ns(Profile_name_create_str(B, config.SSID));
+		ns(Profile_ssid_create(B, (unsigned char *)config.SSID, strlen(config.SSID)));
 		ns(Profile_client_name_create_str(B, config.clientName));
 		ns(Profile_txPwr_add(B, config.txPower));
-		ns(Profile_pwrsave_add(B, config.powerSave&&0xff));
-		ns(Profile_pspDelay_add(B, (config.powerSave >>16)&&0xff));
+		ns(Profile_pwrsave_add(B, config.powerSave&0xffff));
+		ns(Profile_pspDelay_add(B, (config.powerSave >>16)&0xffff));
 		ns(Profile_weptype_add(B, config.wepType));
 		ns(Profile_auth_add(B, config.authType));
 		ns(Profile_eap_add(B, config.eapType));
 		ns(Profile_bitrate_add(B, config.bitRate));
 		ns(Profile_radiomode_add(B, config.radioMode));
-//		ns(Profile_weptxkey_add(B, config->txkey));
 		LRD_WF_AutoProfileCfgStatus((char*) ns(String_value(profile_name)), &apStatus);
-//		ns(Profile_autoprofile_add(B, apStatus));
-#if 0
-		ns(Profile_security1_create_str(B, config->security1));
-		ns(Profile_security2_create_str(B, config->security2));
-		ns(Profile_security3_create_str(B, config->security3));
-		ns(Profile_security4_create_str(B, config->security4));
-		ns(Profile_security5_create_str(B, config->security5));
-#endif
+		ns(Profile_autoprofile_add(B, apStatus));
+
+		switch(config.wepType){
+			case WEP_ON:
+			case WEP_AUTO:
+			case WEP_CKIP:
+			case WEP_AUTO_CKIP:
+			case WPA_TKIP:
+			case WPA2_AES:{
+				unsigned char key[4][26];
+				WEPLEN klen[4];
+				int txkey;
+				GetMultipleWEPKeys(&config, &txkey, &klen[0], key[0],
+					&klen[1], key[1], &klen[2], key[2], &klen[3], key[3]);
+
+				if(klen[0])
+					ns(Profile_security1_create_str(B, "1"));
+				if(klen[1])
+					ns(Profile_security2_create_str(B, "1"));
+				if(klen[2])
+					ns(Profile_security3_create_str(B, "1"));
+				if(klen[3])
+					ns(Profile_security4_create_str(B, "1"));
+				ns(Profile_weptxkey_add(B, txkey));}
+			break;
+			default: {
+				char psk[PSK_SZ] = {0};
+				char user[USER_NAME_SZ] = {0};
+				char pw[USER_PWD_SZ] = {0};
+				char usercert[CRED_CERT_SZ] = {0};
+				char cacert[CRED_CERT_SZ] = {0};
+				char pacfn[CRED_PFILE_SZ] = {0};
+				char pacpw[CRED_PFILE_SZ] = {0};
+				char usercrtpw[USER_PWD_SZ] = {0};
+
+				switch (config.eapType) {
+					case EAP_EAPFAST:
+						GetEAPFASTCred(&config, user, pw, pacfn, pacpw);
+					break;
+					case EAP_PEAPMSCHAP:
+						GetPEAPGTCCred(&config, user, pw, NULL, cacert);
+					break;
+					case EAP_EAPTLS:
+						GetEAPTLSCred(&config, user, usercert, NULL, cacert);
+					break;
+					case EAP_EAPTTLS:
+						GetEAPTTLSCred(&config, user, usercert, NULL, cacert);
+					break;
+					case EAP_PEAPTLS:
+						GetPEAPTLSCred(&config, user, usercert, NULL, cacert);
+					break;
+					case EAP_LEAP:
+						GetLEAPCred(&config, user, pw);
+					break;
+					case EAP_PEAPGTC:
+						GetPEAPGTCCred(&config, user, pw, NULL, cacert);
+					break;
+					default:
+						GetPSK(&config, psk);
+				}
+				GetUserCertPassword(&config, usercrtpw);
+
+				if (strlen(psk) || strlen(user))
+					ns(Profile_security1_create_str(B, "1"));
+
+				if (strlen(pw))
+					ns(Profile_security2_create_str(B, "1"));
+
+				if (strlen(cacert) || strlen(pacfn))
+					ns(Profile_security3_create_str(B, "1"));
+
+				if (strlen(pacpw) || strlen(usercert))
+					ns(Profile_security4_create_str(B, "1"));
+
+				if (strlen(usercrtpw))
+					ns(Profile_security5_create_str(B, "1"));
+			}
+			break;
+	}
 
 	ns(Profile_end_as_root(B));
 	}

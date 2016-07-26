@@ -103,6 +103,7 @@ table Profile {
 	security4:string;
 	security5:string;
 	weptxkey:uint;
+	autoprofile: bool = false;
 }
 
 table P_entry {
