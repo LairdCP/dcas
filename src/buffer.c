@@ -538,8 +538,19 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 					ns(Profile_security4_create_str(B, "1"));
 				ns(Profile_weptxkey_add(B, txkey));}
 			break;
-			default: {
+			case WPA_PSK:
+			case WPA2_PSK:
+			case WPA_PSK_AES:
+			case WPA2_PSK_TKIP:
+			case WAPI_PSK:{
 				char psk[PSK_SZ] = {0};
+				GetPSK(&config, psk);
+
+				if (strlen(psk))
+					ns(Profile_security1_create_str(B, "1"));
+			}
+			break;
+			default: { // EAPs
 				char user[USER_NAME_SZ] = {0};
 				char pw[USER_PWD_SZ] = {0};
 				char usercert[CRED_CERT_SZ] = {0};
@@ -573,10 +584,11 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 						GetPEAPGTCCred(&config, user, pw, NULL, cacert);
 					break;
 					default:
-						GetPSK(&config, psk);
+					// noop
+					break;
 				}
 
-				if (strlen(psk) || strlen(user))
+				if (strlen(user))
 					ns(Profile_security1_create_str(B, "1"));
 
 				if (strlen(pw))
