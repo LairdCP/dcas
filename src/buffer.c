@@ -377,6 +377,9 @@ int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enabl
 
 #define weplen(s) ((strlen(s)==5)?WEPLEN_40BIT:(strlen(s)==16)?WEPLEN_128BIT:WEPLEN_NOT_SET)
 
+SDCERR LRD_WF_AutoProfileCfgControl(const char *name, unsigned char enable);
+SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
+
 //return codes:
 //0 - success
 //positive value - benign error
@@ -472,12 +475,13 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	ret = AddConfig(&config);
 	if (ret==SDCERR_INVALID_NAME)
 		ret = ModifyConfig(config.configName, &config);
+
+	LRD_WF_AutoProfileCfgControl(config.configName, ns(Profile_autoprofile(profile)));
 	SDKUNLOCK(sdk_lock);
 	build_handshake_ack(B, ret);
 	return ret;
 }
 
-SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
 //return codes:
 //0 - success
 //positive value - benign error
@@ -513,7 +517,9 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 		ns(Profile_eap_add(B, config.eapType));
 		ns(Profile_bitrate_add(B, config.bitRate));
 		ns(Profile_radiomode_add(B, config.radioMode));
+		SDKLOCK(sdk_lock);
 		LRD_WF_AutoProfileCfgStatus((char*) ns(String_value(profile_name)), &apStatus);
+		SDKUNLOCK(sdk_lock);
 		ns(Profile_autoprofile_add(B, apStatus));
 
 		switch(config.wepType){
