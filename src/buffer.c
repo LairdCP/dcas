@@ -173,7 +173,7 @@ int build_handshake_ack(flatcc_builder_t *B, unsigned int error)
 	//we need to get from the ssh session somehow so we know what interface
 	//Could have it included by default in process_buffer call
 //	ns(Handshake_ip_create_str(B, "192.168.0.1"));
-	ns(Handshake_api_level_add(B, DCAL_API_VERSION));
+	ns(Handshake_api_level_add(B, DCAL_VERSION));
 	ns(Handshake_error_add(B, error));
 	ns(Handshake_end_as_root(B));
 
@@ -303,7 +303,7 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		return result;
 
 	sdk = longsdk;
-	dcas = DCAL_API_VERSION;
+	dcas = DCAS_COMPONENT_VERSION;
 	driver = status.driverVersion;
 
 	FILE *in = popen( "sdcsupp -qv", "r");

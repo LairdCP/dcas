@@ -106,6 +106,7 @@ void PrintVersion( void )
 {
 	// Display the copyright message
 	printf("%s version: %s\n", runtime_name, _LRD_VERSION_STRING);
+	printf("Device Control API Library version: %s\n", DCAL_VERSION_STR);
 }
 
 void PrintHelp( void )
