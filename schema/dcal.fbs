@@ -64,25 +64,26 @@ table Globals {
 	auth: uint;
 	channel_set_a: uint;
 	channel_set_b: uint;
-	auto_profile: uint;
+	auto_profile: bool;
 	beacon_miss: uint;
-	bt_coex: uint;
+	bt_coex: bool;
 	ccx: bool;
 	cert_path:string;
 	date_check:bool;
 	def_adhoc: uint;
-	fips: uint;
+	fips: bool;
 	pmk: uint;
 	probe_delay: uint;
-	reg: uint;
+	regdomain: uint;
 	roam_period: uint;
 	roam_trigger: uint;
 	rts: uint;
 	scan_dfs: uint;
 	ttls: uint;
-	uapsd: uint;
+	uapsd: bool;
 	wmm: bool;
-	numprofiles: uint;
+	ignore_null_ssid: bool;
+	dfs_channels: uint;
 }
 
 table Profile {
@@ -123,6 +124,8 @@ enum Commands:uint {
 	INVALID =0,
 	GETVERSIONS,
 	GETSTATUS,
+	GETGLOBALS,
+	SETGLOBALS,
 	GETPROFILE,
 	SETPROFILE,
 	DELPROFILE,
