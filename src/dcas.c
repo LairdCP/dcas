@@ -6,6 +6,8 @@
 #include <signal.h>
 #include <libssh/server.h>
 #include "debug.h"
+#include "sdc_sdk.h"
+#include "dcal_api.h"
 #include "version.h"
 #include "ssh_server.h"
 
