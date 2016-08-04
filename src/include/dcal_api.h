@@ -21,6 +21,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/time.h>
 
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
@@ -530,6 +531,14 @@ void dcal_wifi_profile_printf( laird_profile_handle profile);
 int dcal_wifi_restart( laird_session_handle session);
 // dcal_system_restart will close the session handle
 int dcal_system_restart( laird_session_handle session);
+
+// Time functions
+int dcal_time_set( laird_session_handle session,
+                      time_t tv_sec, suseconds_t tv_usec);
+int dcal_time_get( laird_session_handle session,
+                      time_t *tv_sec, suseconds_t *tv_usec);
+int dcal_ntpdate( laird_session_handle session,
+                      char * parameter_string );
 
 const char *dcal_err_to_string( int code);
 
