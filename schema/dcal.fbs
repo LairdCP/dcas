@@ -122,8 +122,14 @@ table Time {
 	tv_usec: int;
 }
 
+table Filexfer {
+	file_path: string;
+	size: int;
+	mode: int;
+}
+
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, U32, String, Time }
+union Cmd_pl { Globals, Profile, U32, String, Time, Filexfer }
 
 enum Commands:uint {
 	INVALID =0,
@@ -143,6 +149,11 @@ enum Commands:uint {
 	SETTIME,
 	GETTIME,
 	NTPDATE,
+	FILEPUSH,
+	FILEPULL,
+	FWUPDATE,
+	CLIFILE,
+	GETLOGS,
 	}
 
 table Command {

@@ -1,4 +1,5 @@
 #define _BSD_SOURCE
+#define _POSIX_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -9,6 +10,8 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <libgen.h>
+
 #include "debug.h"
 #include "sdc_sdk.h"
 #include "buffer.h"
@@ -27,6 +30,7 @@
 
 #define SDKLOCK(x) (pthread_mutex_lock(x))
 #define SDKUNLOCK(x) (pthread_mutex_unlock(x))
+#define TMPDIR "/tmp"
 
 // a 0 return code means invalid buffer
 flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
@@ -97,6 +101,12 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
+		case ns(Filexfer_type_hash):
+			if(ns(Filexfer_verify_as_root(buf,size))){
+				DBGERROR("%s: unable to verify buffer\n", __func__);
+				ret = 0;
+				}
+			break;
 		default:
 			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
 			ret = 0;
@@ -136,6 +146,9 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 			break;
 		case ns(Time_type_hash):
 			return "Time";
+			break;
+		case ns(Filexfer_type_hash):
+			return "Filexfer";
 			break;
 
 		default:
@@ -795,48 +808,63 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
-int do_issue_ntpdate(flatcc_builder_t *B, ns(Command_table_t) ct)
+int do_system_command(flatcc_builder_t *B, char *commandline)
 {
-	ns(String_table_t) string;
 	int ret = DCAL_SUCCESS;
-	string = ns(Command_cmd_pl(ct));
-	char *cmd = NULL;
-	FILE *fp = NULL;
+	FILE *file = NULL;
 
-	if (((char*)ns(String_value(string)))==NULL)
+	if (commandline==NULL)
 		ret = DCAL_INVALID_PARAMETER;
 	else
 	{
-#define NTPDATE "/usr/bin/ntpdate "
-		cmd = (char*)malloc(strlen(NTPDATE)+
-		                    strlen((char*)ns(String_value(string)))+2);
-		if (cmd==NULL)
-			ret = DCAL_HOST_INSUFFICIENT_MEMORY;
-		else
-		{
-			sprintf(cmd, "%s%s", NTPDATE, (char*)ns(String_value(string)));
-			DBGDEBUG("Issuing: %s\n", cmd);
+		DBGDEBUG("Issuing: '%s'\n", commandline);
 
-			fp = popen(cmd, "w");
-			if (fp==NULL) {
-				DBGDEBUG("popen error\n");
-				ret = DCAL_HOST_GENERAL_FAIL;
-			} else {
-				ret = pclose(fp);
-				if (ret == -1) {
-					DBGDEBUG("pclose error\n");
-					ret = DCAL_HOST_GENERAL_FAIL;
-				}
-				else
-					ret = WEXITSTATUS(ret);
+		file = popen(commandline, "w");
+		if (file==NULL) {
+			DBGDEBUG("popen error\n");
+			ret = DCAL_WB_GENERAL_FAIL;
+		} else {
+			ret = pclose(file);
+			if (ret == -1) {
+				DBGDEBUG("pclose error\n");
+				ret = DCAL_WB_GENERAL_FAIL;
 			}
+			else
+				ret = WEXITSTATUS(ret);
 		}
 	}
 
 	build_handshake_ack(B, ret);
-	if (cmd)
-		free(cmd);
 	return 0;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_issue_ntpdate(flatcc_builder_t *B, ns(Command_table_t) ct)
+{
+	ns(String_table_t) string;
+	char *commandline = NULL;
+	int ret;
+
+	string = ns(Command_cmd_pl(ct));
+
+	if (((char*)ns(String_value(string)))==NULL)
+		return DCAL_INVALID_PARAMETER;
+
+#define NTPDATE "/usr/bin/ntpdate "
+	commandline = (char*)malloc(strlen(NTPDATE)+
+		                    strlen((char*)ns(String_value(string)))+2);
+	if (commandline==NULL)
+		return DCAL_WB_INSUFFICIENT_MEMORY;
+
+	sprintf(commandline, "%s%s", NTPDATE, (char*)ns(String_value(string)));
+
+	ret = do_system_command(B, commandline);
+	free(commandline);
+
+	return ret;
 }
 
 //return codes:
@@ -857,7 +885,7 @@ int do_get_time(flatcc_builder_t *B)
 
 		ns(Time_end_as_root(B));
 	} else
-		build_handshake_ack(B, DCAL_HOST_GENERAL_FAIL);
+		build_handshake_ack(B, DCAL_WB_GENERAL_FAIL);
 
 	return 0;
 }
@@ -878,10 +906,381 @@ int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
 	tv.tv_usec = ns(Time_tv_usec(tt));
 
 	if (settimeofday(&tv, NULL))
-		ret = DCAL_HOST_GENERAL_FAIL;
+		ret = DCAL_WB_GENERAL_FAIL;
 
 	build_handshake_ack(B, ret);
 	return 0;
+}
+
+#define safe_free(x) do{if(x){free(x); x=NULL;}}while (0)
+char *strdup(const char *src)
+{
+	if (src==NULL)
+		return NULL;
+	size_t len = strlen(src);
+	char *copy = malloc(len + 1);
+	if (copy == NULL)
+			return NULL;
+
+	strncpy(copy, src, len);
+	copy[len]=0;
+	return copy;
+}
+#define BUF16K 16384
+
+		//send start ack
+int send_an_ack( flatcc_builder_t *B, char * buf, size_t bufsize, ssh_channel chan, int error)
+{
+	size_t nbytes;
+	int w, ret = DCAL_SUCCESS;
+	build_handshake_ack(B, error);
+	flatcc_builder_copy_buffer(B, buf, bufsize);
+	nbytes =flatcc_builder_get_buffer_size(B);
+
+	if (nbytes <= 0) {
+		flatcc_builder_clear(B);
+		ret = DCAL_FLATBUFF_ERROR;
+		build_handshake_ack(B, ret);
+	}else {
+		w = ssh_channel_write(chan, buf, nbytes);
+		if (nbytes != w){
+			DBGERROR("Failure to send buffer from %s\n", __func__);
+			ret = -1;
+		}
+	}
+	return ret;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock, ssh_channel chan)
+{
+	ns(Filexfer_table_t) fxt;
+	int ret = DCAL_SUCCESS;
+	FILE *file = NULL;
+	int size,mode,r,w,total=0;
+	char *full_path=NULL;
+	char *tmpfile=NULL;
+	char *path= TMPDIR;
+	char *filename=NULL;
+	char *full_file_path = NULL;
+	char *buf=NULL;
+
+	fxt = ns(Command_cmd_pl(cmd));
+	if(flatbuffers_string_len(ns(Filexfer_file_path(fxt)))==0)
+		return DCAL_INVALID_PARAMETER;
+	else
+	{
+		size = ns(Filexfer_size(fxt));
+		mode = ns(Filexfer_mode(fxt));
+		full_path = strdup(ns(Filexfer_file_path(fxt)));
+
+		if(!full_path) {
+			ret = DCAL_NO_MEMORY;
+			goto cleanup;
+		}
+
+		tmpfile = strdup(full_path);
+		if(tmpfile)
+			filename = strdup(basename(full_path));
+
+		full_file_path = malloc(strlen(path)+strlen(filename)+2);
+		buf = malloc(BUF16K);
+		if ((!full_file_path)||!(buf)) {
+			ret = DCAL_NO_MEMORY;
+			goto cleanup;
+		}
+		memset(buf, 0, BUF16K);
+		sprintf(full_file_path,"%s/%s",path,filename);
+		DBGINFO("incoming file to be saved to: %s\n",full_file_path);
+
+		file = fopen(full_file_path, "w");
+		if (!file) {
+			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+			goto cleanup;
+		}
+
+		ret=send_an_ack(B, buf, BUF16K, chan, ret);
+		if (ret)
+			goto closefile;
+
+		// read the file from socket, write to fs
+		memset(buf, 0, BUF16K);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each channel_read?
+		do {
+			r = ssh_channel_read(chan, buf, BUF16K, 0);
+			if(r==SSH_ERROR){
+				DBGERROR("Failure to read ssh buffer\n");
+				ret =-1;
+				goto closefile;
+			} else if (r==0)
+				break;
+			w = fwrite(buf, r, 1, file);
+			if (w<0) {
+				DBGERROR("error writing local file: %s\n", full_path);
+				ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+				goto closefile;
+			}
+			total += r;
+		} while (total < size);
+
+		DBGINFO("Wrote %d bytes to fs\n", total);
+		build_handshake_ack(B, ret);
+	}
+closefile:
+	fclose(file);
+	if (!ret)
+		chmod(full_path, mode);
+
+cleanup:
+	safe_free(buf);
+	safe_free(full_path);
+	safe_free(tmpfile);
+	// do not free path as it pointing to a static string
+	safe_free(filename);
+	safe_free(full_file_path);
+
+	return ret;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, pthread_mutex_t *sdk_lock, ssh_channel chan)
+{
+	char *buf, *localfilename = NULL;
+	ns(String_table_t) string;
+	ns(Filexfer_table_t) fxt;
+	ns(Cmd_pl_union_ref_t) cmd_pl;
+	struct stat stats;
+	int fd, r, w, ret = DCAL_SUCCESS;
+	size_t total, size;
+	FILE *file=NULL;
+
+	string = ns(Command_cmd_pl(cmd));
+	size = flatbuffers_string_len(ns(String_value(string)));
+	if(size==0) {
+		if (filename==NULL) {
+			ret = DCAL_INVALID_PARAMETER; // one of cmd and filename must have a value
+		} else {
+			// the filename parameter allows the dcas internals to specify a
+			// file outside of the /tmp directory
+			localfilename = strdup(filename);
+		}
+	} else {//extract filename from Command_Table
+		char *tmp = strdup(ns(String_value(string)));
+		char *bname = strdup(basename(tmp));
+		localfilename = malloc(sizeof(TMPDIR)+strlen(bname)+2);
+		if (localfilename){
+			sprintf(localfilename,"%s/%s",TMPDIR,bname);
+		}
+		safe_free (tmp);
+		safe_free (bname);
+	}
+	if (!localfilename)
+		ret = DCAL_NO_MEMORY;
+	else {
+		buf = malloc(BUF16K);
+		if (!buf)
+			ret = DCAL_NO_MEMORY;
+	}
+
+	if (ret==DCAL_SUCCESS){
+		DBGINFO("getting file: %s\n", localfilename);
+
+		file = fopen(localfilename, "r");
+		if (!file) {
+			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+			goto cleanup;
+		}
+
+		fd = fileno(file);
+		if(fd<0) {
+			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+			goto cleanup;
+		}
+
+		size = fstat(fd, &stats);
+		if (size<0){
+			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+			goto cleanup;
+		}
+
+		flatcc_builder_reset(B);
+		ns(Filexfer_start(B));
+		ns(Filexfer_file_path_create_str(B, localfilename));
+		ns(Filexfer_size_add(B,stats.st_size));
+		ns(Filexfer_mode_add(B,stats.st_mode));
+		cmd_pl.Filexfer = ns(Filexfer_end(B));
+		cmd_pl.type = ns(Cmd_pl_Filexfer);
+
+		flatbuffers_buffer_start(B, ns(Command_type_identifier));
+		ns(Command_start(B));
+		ns(Command_cmd_pl_add(B, cmd_pl));
+		ns(Command_command_add(B, ns(Commands_FILEPUSH)));
+		ns(Command_end_as_root(B));
+
+		size=flatcc_builder_get_buffer_size(B);
+		assert(size<BUF16K);
+		flatcc_builder_copy_buffer(B, buf, size);
+
+		w = ssh_channel_write(chan, buf, size);
+		if (size != w){
+				DBGERROR("Failure to send buffer from %s\n", __func__);
+				ret = -1;
+				goto cleanup;
+		}
+
+		if (ret)
+			goto cleanup;
+
+		size = stats.st_size;
+		total = 0;
+		// now read the file from fs and write to socket
+		memset(buf, 0, BUF16K);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each fread?
+		do {
+			r = fread(buf, 1, BUF16K, file);
+			if(r==0) break;
+			else if (r<0){
+				DBGERROR("Error reading file: %s\n", localfilename);
+				ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+				goto cleanup;
+			}
+			w = ssh_channel_write(chan, buf, r);
+			if (w!=r){
+				DBGERROR("Failure to send buffer from %s\n", __func__);
+				DBGERROR("Bytes from from file: %d\n"
+				         "Bytes written to chan: %d\n", r, w);
+				ret = -1;
+				goto cleanup;
+			}
+
+			total += r;
+
+		} while (total < size);
+
+		if (ret==DCAL_SUCCESS)
+			DBGINFO("Wrote %d bytes to ssh channel\n", total);
+		else
+			DBGERROR("DCAL failure in %s: %d\n", __func__, ret);
+		build_handshake_ack(B, ret);
+
+	}
+
+cleanup:
+	if(file)
+		fclose(file);
+	safe_free(buf);
+	safe_free(localfilename);
+	return ret;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) string;
+	char *commandline = NULL;
+	int ret;
+
+	string = ns(Command_cmd_pl(cmd));
+
+	if (((char*)ns(String_value(string)))==NULL)
+		return DCAL_INVALID_PARAMETER;
+
+#define FWUPDATE "/usr/sbin/fw_update "
+#define FWTXT " /tmp/fw.txt"
+	commandline = (char*)malloc(strlen(FWUPDATE)+strlen(FWTXT)+
+		                    strlen((char*)ns(String_value(string)))+1);
+	if (commandline==NULL)
+		return DCAL_WB_INSUFFICIENT_MEMORY;
+
+	sprintf(commandline, "%s%s%s", FWUPDATE,
+	                               (char*)ns(String_value(string)),
+	                               FWTXT);
+
+	ret = do_system_command(B, commandline);
+	free(commandline);
+
+	return ret;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_process_cli_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) string;
+	char *commandline = NULL;
+	char *tmppath = NULL;
+	char *tmpname = NULL;
+	char *filename = NULL;
+	int ret;
+
+	string = ns(Command_cmd_pl(cmd));
+
+	if(flatbuffers_string_len(ns(String_value(string)))==0)
+		return DCAL_INVALID_PARAMETER;
+
+	tmppath=strdup(ns(String_value(string)));
+	tmpname=strdup(basename(tmppath));
+
+	filename=malloc(strlen(TMPDIR)+strlen(tmpname)+2);
+	if(!filename) {
+		ret = DCAL_WB_INSUFFICIENT_MEMORY;
+		goto cleanup;
+	}
+
+	sprintf(filename, "%s/%s", TMPDIR, tmpname);
+
+	if (access( filename, R_OK) == -1){
+		ret = DCAL_WB_INSUFFICIENT_MEMORY;
+		goto cleanup;
+	}
+
+#define SDCCLI "/usr/bin/sdc_cli < "
+	commandline = (char*)malloc(strlen(SDCCLI)+
+		                    strlen((char*)ns(String_value(string)))+2);
+	if (commandline==NULL){
+		ret = DCAL_WB_INSUFFICIENT_MEMORY;
+		goto cleanup;
+	}
+
+	sprintf(commandline, "%s%s", SDCCLI, (char*)ns(String_value(string)));
+
+	ret = do_system_command(B, commandline);
+
+	cleanup:
+	safe_free(commandline);
+	safe_free(tmppath);
+	safe_free(tmpname);
+	safe_free(filename);
+	return ret;
+
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_get_logs(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock, ssh_channel chan)
+{
+	char *commandline = NULL;
+	int ret;
+
+	commandline = "/usr/bin/log_dump";
+
+	ret = do_system_command(B, commandline);
+
+	if (ret == DCAL_SUCCESS)
+		ret = do_send_file(B, NULL, "/tmp/log_dump.txt", sdk_lock, chan);
+
+	return ret;
 }
 
 //return codes:
@@ -889,7 +1288,7 @@ int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
 //positive value - benign error
 //negative value - unrecoverable error
 int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
- pthread_mutex_t *sdk_lock, bool *exit_called)
+ pthread_mutex_t *sdk_lock, bool *exit_called, ssh_channel chan)
 {
 	switch(ns(Command_command(cmd))){
 		case ns(Commands_GETSTATUS):
@@ -934,31 +1333,52 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			DBGDEBUG("Del profile\n");
 			return do_del_profile(B, cmd, sdk_lock);
 			break;
-			case ns(Commands_GETGLOBALS):
+		case ns(Commands_GETGLOBALS):
 			DBGDEBUG("Get Globals\n");
 			return do_get_globals(B, sdk_lock);
 			break;
-			case ns(Commands_SETGLOBALS):
+		case ns(Commands_SETGLOBALS):
 			DBGDEBUG("Set Globals\n");
 			return do_set_globals(B, cmd, sdk_lock);
 			break;
-			case ns(Commands_SETTIME):
+		case ns(Commands_SETTIME):
 			DBGDEBUG("Set Time\n");
 			return do_set_time(B, cmd);
 			break;
-			case ns(Commands_GETTIME):
+		case ns(Commands_GETTIME):
 			DBGDEBUG("Get Time\n");
 			return do_get_time(B);
 			break;
-			case ns(Commands_NTPDATE):
+		case ns(Commands_NTPDATE):
 			DBGDEBUG("NTPDATE\n");
 			return do_issue_ntpdate(B, cmd);
 			break;
-//TODO - add other command processing
 		case ns(Commands_GETPROFILELIST):
+			DBGDEBUG("GETPROFILELIST\n");
 			return do_get_profile_list(B, sdk_lock);
 			break;
+		case ns(Commands_FILEPUSH):
+			DBGDEBUG("FILEPUSH\n");
+			return do_receive_file(B, cmd, sdk_lock, chan);
+			break;
+		case ns(Commands_FILEPULL):
+			DBGDEBUG("FILEPULL\n");
+			return do_send_file(B, cmd, NULL, sdk_lock, chan);
+			break;
+		case ns(Commands_FWUPDATE):
+			DBGDEBUG("FILEPUSH\n");
+			return do_fw_update(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_CLIFILE):
+			DBGDEBUG("CLIFILE\n");
+			return do_process_cli_file(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_GETLOGS):
+			DBGDEBUG("GETLOGS");
+			return do_get_logs(B, cmd, sdk_lock, chan);
+			break;
 		default:
+			DBGDEBUG("unknown command: %d\n",ns(Command_command(cmd)));
 			return SDCERR_NOT_IMPLEMENTED;
 	}
 }
@@ -972,7 +1392,7 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 // recoverable error is handled by putting a NACK in the return buffer
 // and the error in the returned handshake table
 
-int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called)
+int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called, ssh_channel chan)
 {
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
@@ -1010,7 +1430,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			break;
 		case ns(Command_type_hash):
 			// process command
-			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock, exit_called))){
+			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock, exit_called, chan))){
 				// un-recoverable errors will be negative
 				if (ret > 0)
 					goto respond_with_nack;
@@ -1033,7 +1453,7 @@ respond_normal:
 	flatcc_builder_copy_buffer(&builder, buf, buf_size);
 	nbytes =flatcc_builder_get_buffer_size(&builder);
 	DBGDEBUG("Created response buffer size: %zd\n", nbytes);
-	hexdump("outbound buffer", buf, nbytes, stdout);
+	//hexdump("outbound buffer", buf, nbytes, stdout);
 respond_with_error: // allow for exit with 0 or negative return
 	flatcc_builder_clear(&builder);
 	return nbytes;

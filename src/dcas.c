@@ -34,6 +34,7 @@ void sigproc(int unused)
 
 int main(int argc,char *argv[])
 {
+	PrintVersion();
 	REPORT_ENTRY_DEBUG;
 
 	int rc = 0;
