@@ -37,19 +37,19 @@ extern "C" {
 
 typedef enum _DCAL_ERR{
 	DCAL_SUCCESS = 0,
-	DCAL_HOST_GENERAL_FAIL,
-	DCAL_HOST_INVALID_NAME,
-	DCAL_HOST_INVALID_CONFIG,
-	DCAL_HOST_INVALID_DELETE,
-	DCAL_HOST_POWERCYCLE_REQUIRED,
-	DCAL_HOST_INVALID_PARAMETER,
-	DCAL_HOST_INVALID_EAP_TYPE,
-	DCAL_HOST_INVALID_WEP_TYPE,
-	DCAL_HOST_INVALID_FILE,
-	DCAL_HOST_INSUFFICIENT_MEMORY,
-	DCAL_HOST_NOT_IMPLEMENTED,
-	DCAL_HOST_NO_HARDWARE,
-	DCAL_HOST_INVALID_VALUE,
+	DCAL_WB_GENERAL_FAIL,
+	DCAL_WB_INVALID_NAME,
+	DCAL_WB_INVALID_CONFIG,
+	DCAL_WB_INVALID_DELETE,
+	DCAL_WB_POWERCYCLE_REQUIRED,
+	DCAL_WB_INVALID_PARAMETER,
+	DCAL_WB_INVALID_EAP_TYPE,
+	DCAL_WB_INVALID_WEP_TYPE,
+	DCAL_WB_INVALID_FILE,
+	DCAL_WB_INSUFFICIENT_MEMORY,
+	DCAL_WB_NOT_IMPLEMENTED,
+	DCAL_WB_NO_HARDWARE,
+	DCAL_WB_INVALID_VALUE,
 
 	DCAL_INVALID_PARAMETER = 100,
 	DCAL_INVALID_HANDLE,
@@ -64,6 +64,8 @@ typedef enum _DCAL_ERR{
 	DCAL_FLATCC_NOT_INITIALIZED,
 	DCAL_FLATBUFF_VALIDATION_FAIL,
 	DCAL_DATA_STALE,
+	DCAL_LOCAL_FILE_ACCESS_DENIED,
+	DCAL_REMOTE_FILE_ACCESS_DENIED,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -533,12 +535,50 @@ int dcal_wifi_restart( laird_session_handle session);
 int dcal_system_restart( laird_session_handle session);
 
 // Time functions
+//  the values for the time_set and time_get functions are the same values
+//  as those used in the structure passed to the system functions
+//  gettimeofday() and settimeofday()
 int dcal_time_set( laird_session_handle session,
                       time_t tv_sec, suseconds_t tv_usec);
 int dcal_time_get( laird_session_handle session,
                       time_t *tv_sec, suseconds_t *tv_usec);
+
+// the dcal_ntpdate() function takes a character array which contains the
+// parameter string that will be placed on the command line for a call
+// to ntpdate.  Example:
+//      dcal_ntpdate( session, "pool.ntp.org");
 int dcal_ntpdate( laird_session_handle session,
                       char * parameter_string );
+// file handling
+
+// local_file is the full path and file name on host. remote_file can be
+// NULL in which case the basename of local_file will be used. The
+// remote_file will be saved to /tmp/ on WB.  NOTE: /tmp is not persistent
+// ont he WB as /tmp is a ramdisk.
+int dcal_file_push_to_wb(laird_session_handle session,
+                             char * local_file_name,
+                             char * remote_file_name);
+
+// remote_file_name is full path and filename on WB.  local_file_name is
+// the full path and file name on host. local_file_name can be NULL in
+// which case remote_file_name base name will be used in the local directory
+int dcal_file_pull_from_wb(laird_session_handle session,
+                             char * remote_file_name,
+                             char * local_file_name);
+
+// firmware update will be attempted on the fw.txt file in /tmp.
+// use dcal_file_push_to_wb() to send each individual binary file
+// and fw.txt before calling. parameter_string is the parameters for the
+// fw_update execution
+int dcal_fw_update(laird_session_handle session, char * parameter_string);
+
+// dest_file is full location and file name where log should be saved
+int dcal_pull_logs(laird_session_handle session, char * dest_file);
+
+// src_file is full location and file name where command file resides.
+int dcal_process_cli_command_list(laird_session_handle session, char * src_file);
+
+// misc
 
 const char *dcal_err_to_string( int code);
 

@@ -215,7 +215,7 @@ void * ssh_session_thread( void *param )
 		if(nbytes>0) {
 			DBGINFO("Got %d bytes from client:\n", nbytes);
 
-			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake, exit_called);
+			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake, exit_called, chan);
 
 			if (nbytes<0){
 				DBGERROR("error in process_bufer(): %d\n", nbytes);
