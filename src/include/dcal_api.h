@@ -178,57 +178,59 @@ int dcal_wifi_global_get_auth_server( laird_global_handle global,
                                       SERVER_AUTH *auth);
 
 typedef enum _bchannels_masks{
-	b_1 = 1>>0, //2412 GHz
-	b_2 = 1>>1, //2417 GHz
-	b_3 = 1>>2, //2422 GHz
-	b_4 = 1>>3, //2427 GHz
-	b_5 = 1>>4, //2432 GHz
-	b_6 = 1>>5, //2437 GHz
-	b_7 = 1>>6, //2442 GHz
-	b_8 = 1>>7, //2447 GHz
-	b_9 = 1>>8, //2452 GHz
-	b_10 = 1>>9, //2457 GHz
-	b_11 = 1>>10, //2462 GHz
-	b_12 = 1>>11, //2467 GHz
-	b_13 = 1>>12, //2472 GHz
-	b_14 = 1>>13, //2484 GHz
+	b_1 = 1<<0, //2412 GHz
+	b_2 = 1<<1, //2417 GHz
+	b_3 = 1<<2, //2422 GHz
+	b_4 = 1<<3, //2427 GHz
+	b_5 = 1<<4, //2432 GHz
+	b_6 = 1<<5, //2437 GHz
+	b_7 = 1<<6, //2442 GHz
+	b_8 = 1<<7, //2447 GHz
+	b_9 = 1<<8, //2452 GHz
+	b_10 = 1<<9, //2457 GHz
+	b_11 = 1<<10, //2462 GHz
+	b_12 = 1<<11, //2467 GHz
+	b_13 = 1<<12, //2472 GHz
+	b_14 = 1<<13, //2484 GHz
+	b_full = 0xffff // all channels
 } B_CHAN_MASKS;
 
 typedef enum _achannels_masks{
-	a_36 = 1>>0, //5180 GHz (U-NII-1)
-	a_40 = 1>>1, //5200 GHz
-	a_44 = 1>>2, //5220 GHz
-	a_48 = 1>>3, //5240 GHz
-	a_52 = 1>>4, //5260 GHz (U-NII-2/DFS)
-	a_56 = 1>>5, //5280 GHz
-	a_60 = 1>>6, //5300 GHz
-	a_64 = 1>>7, //5320 GHz
-	a_100 = 1>>8, //5500 GHz
-	a_104 = 1>>9, //5520 GHz
-	a_108 = 1>>10, //5540 GHz
-	a_112 = 1>>11, //5560 GHz
-	a_116 = 1>>12, //5580 GHz
-	a_120 = 1>>13, //5600 GHz
-	a_124 = 1>>14, //5620 GHz
-	a_128 = 1>>15, //5640 GHz
-	a_132 = 1>>16, //5660 GHz
-	a_136 = 1>>17, //5680 GHz
-	a_140 = 1>>18, //5700 GHz
-	a_149 = 1>>19, //5745 GHz (U-NII-3)
-	a_153 = 1>>20, //5765 GHz
-	a_157 = 1>>21, //5785 GHz
-	a_161 = 1>>22, //5805 GHz
-	a_165 = 1>>23, //5825 GHz
+	a_36 = 1<<0, //5180 GHz (U-NII-1)
+	a_40 = 1<<1, //5200 GHz
+	a_44 = 1<<2, //5220 GHz
+	a_48 = 1<<3, //5240 GHz
+	a_52 = 1<<4, //5260 GHz (U-NII-2/DFS)
+	a_56 = 1<<5, //5280 GHz
+	a_60 = 1<<6, //5300 GHz
+	a_64 = 1<<7, //5320 GHz
+	a_100 = 1<<8, //5500 GHz
+	a_104 = 1<<9, //5520 GHz
+	a_108 = 1<<10, //5540 GHz
+	a_112 = 1<<11, //5560 GHz
+	a_116 = 1<<12, //5580 GHz
+	a_120 = 1<<13, //5600 GHz
+	a_124 = 1<<14, //5620 GHz
+	a_128 = 1<<15, //5640 GHz
+	a_132 = 1<<16, //5660 GHz
+	a_136 = 1<<17, //5680 GHz
+	a_140 = 1<<18, //5700 GHz
+	a_149 = 1<<19, //5745 GHz (U-NII-3)
+	a_153 = 1<<20, //5765 GHz
+	a_157 = 1<<21, //5785 GHz
+	a_161 = 1<<22, //5805 GHz
+	a_165 = 1<<23, //5825 GHz
+	a_full = 0xffffff // all channels
 } A_CHAN_MASKS;
 
-int dcal_wifi_global_set_channel_set_a( laird_global_handle global,
+int dcal_wifi_global_set_achannel_mask( laird_global_handle global,
                                         unsigned int channel_set_a);
-int dcal_wifi_global_get_channel_set_a( laird_global_handle global,
+int dcal_wifi_global_get_achannel_mask( laird_global_handle global,
                                         unsigned int *channel_set_a);
 
-int dcal_wifi_global_set_channel_set_b( laird_global_handle global,
+int dcal_wifi_global_set_bchannel_mask( laird_global_handle global,
                                         unsigned int channel_set_b);
-int dcal_wifi_global_get_channel_set_b( laird_global_handle global,
+int dcal_wifi_global_get_bchannel_mask( laird_global_handle global,
                                         unsigned int *channel_set_b);
 
 int dcal_wifi_global_set_auto_profile( laird_global_handle global,
@@ -543,12 +545,13 @@ int dcal_time_set( laird_session_handle session,
 int dcal_time_get( laird_session_handle session,
                       time_t *tv_sec, suseconds_t *tv_usec);
 
-// the dcal_ntpdate() function takes a character array which contains the
-// parameter string that will be placed on the command line for a call
+// the dcal_ntpdate() function takes a character string which contains
+// the ntp server that will be placed on the command line for a call
 // to ntpdate.  Example:
 //      dcal_ntpdate( session, "pool.ntp.org");
+// only [a-z],[0-9],[-./],[A-Z] characters are valid
 int dcal_ntpdate( laird_session_handle session,
-                      char * parameter_string );
+                      char * server_name );
 // file handling
 
 // local_file is the full path and file name on host. remote_file can be
@@ -566,11 +569,22 @@ int dcal_file_pull_from_wb(laird_session_handle session,
                              char * remote_file_name,
                              char * local_file_name);
 
-// firmware update will be attempted on the fw.txt file in /tmp.
-// use dcal_file_push_to_wb() to send each individual binary file
-// and fw.txt before calling. parameter_string is the parameters for the
-// fw_update execution
-int dcal_fw_update(laird_session_handle session, char * parameter_string);
+typedef enum _fw_update_flags {
+	FWU_FORCE            = 1 << 0, // force image overwrite
+	FWU_DISABLE_NOTIFY   = 1 << 1, // disable notification when complete
+	FWU_DISABLE_TRANSFER = 1 << 2  // disable transference
+} FW_UPDATE_FLAGS;
+
+// in order to issue the fw_update() function, the desired files must first
+// be transfered to the remote device.  This includes the fw.txt file.  The
+// files will be placed in the /tmp directory on the WB.  When this function
+// is executed, firmware update will be attempted on the transfered fw.txt
+// file in /tmp.  fw_update flags can be set in the flags variable.  Flags
+// can also be set in the fw.txt file itself.
+// NOTE: The disable reboot flag will be added by dcas so the user must
+// specifically call dcal_system_restart() when desiring restart after
+// fw_update.
+int dcal_fw_update(laird_session_handle session, int flags);
 
 // dest_file is full location and file name where log should be saved
 int dcal_pull_logs(laird_session_handle session, char * dest_file);

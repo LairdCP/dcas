@@ -1230,25 +1230,46 @@ cleanup:
 //negative value - unrecoverable error
 int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
 {
-	ns(String_table_t) string;
+	ns(U32_table_t) u32;
 	char *commandline = NULL;
+	unsigned int flags, cmdlinelen = 0;
 	int ret;
 
-	string = ns(Command_cmd_pl(cmd));
+	u32 = ns(Command_cmd_pl(cmd));
 
-	if (((char*)ns(String_value(string)))==NULL)
-		return DCAL_INVALID_PARAMETER;
+#define FWUPDATE               "/usr/sbin/fw_update "
+#define FWTXT                  " /tmp/fw.txt"
+#define FWU_FORCE_F            " -f"
+#define FWU_DISABLE_REBOOT_F   " -xr"
+#define FWU_DISABLE_NOTIFY_F   "n"
+#define FWU_DISABLE_TRANSFER_F "t"
 
-#define FWUPDATE "/usr/sbin/fw_update "
-#define FWTXT " /tmp/fw.txt"
-	commandline = (char*)malloc(strlen(FWUPDATE)+strlen(FWTXT)+
-		                    strlen((char*)ns(String_value(string)))+1);
+	cmdlinelen = strlen(FWUPDATE)+
+	              strlen(FWTXT)+
+	              strlen(FWU_DISABLE_REBOOT_F) + 1;
+
+	flags = ns(U32_value(u32));
+
+	if (flags & FWU_FORCE)
+		cmdlinelen += strlen(FWU_FORCE_F);
+
+	if (flags & FWU_DISABLE_NOTIFY)
+		cmdlinelen += strlen(FWU_DISABLE_NOTIFY_F);
+
+	if (flags & FWU_DISABLE_TRANSFER)
+		cmdlinelen += strlen(FWU_DISABLE_TRANSFER_F);
+
+	commandline = (char*)malloc(cmdlinelen);
 	if (commandline==NULL)
 		return DCAL_WB_INSUFFICIENT_MEMORY;
 
-	sprintf(commandline, "%s%s%s", FWUPDATE,
-	                               (char*)ns(String_value(string)),
-	                               FWTXT);
+	sprintf(commandline, "%s%s%s%s%s%s",
+	               FWUPDATE,
+	               FWTXT,
+	               (flags & FWU_FORCE)?FWU_FORCE_F:"",
+	               FWU_DISABLE_REBOOT_F,
+	               (flags & FWU_DISABLE_NOTIFY)?FWU_DISABLE_NOTIFY_F:"",
+	               (flags & FWU_DISABLE_TRANSFER)?FWU_DISABLE_TRANSFER_F:"");
 
 	ret = do_system_command(B, commandline);
 	free(commandline);
