@@ -847,6 +847,41 @@ int do_system_command(flatcc_builder_t *B, char *commandline)
 	return 0;
 }
 
+// return 0 on success; 1 on failure
+int in_valid_set(char c)
+{
+
+	if ((c >= 'a') && (c <='z')) //lower case alpha
+		return 0;
+
+	if ((c >= 'A') && (c <='Z')) //upper case alpha
+		return 0;
+
+	if ((c >= '-') && (c <='9')) //'-','.','/',digits
+		return 0;
+
+	if (c=='_')
+		return 0;
+
+	return 1;
+}
+
+int validate_fqdn(char *str)
+{
+	int i, len;
+
+	if (str==NULL)
+		return 0;
+
+	len = strlen(str);
+
+	for (i=0; i<len; i++)
+		if (!in_valid_set(str[i]))
+			return 1;
+
+	return 0;
+}
+
 //return codes:
 //0 - success
 //positive value - benign error
@@ -860,6 +895,9 @@ int do_issue_ntpdate(flatcc_builder_t *B, ns(Command_table_t) ct)
 	string = ns(Command_cmd_pl(ct));
 
 	if (((char*)ns(String_value(string)))==NULL)
+		return DCAL_INVALID_PARAMETER;
+
+	if(!validate_fqdn(((char*)ns(String_value(string)))))
 		return DCAL_INVALID_PARAMETER;
 
 #define NTPDATE "/usr/bin/ntpdate "
