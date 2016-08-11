@@ -743,6 +743,7 @@ int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		ns(Globals_probe_delay_add(B, gcfg.probeDelay));
 		ns(Globals_regdomain_add(B, gcfg.regDomain));
 		ns(Globals_roam_period_add(B, gcfg.roamPeriod));
+		ns(Globals_roam_periodms_add(B, gcfg.roamPeriodms));
 		ns(Globals_roam_trigger_add(B, gcfg.roamTrigger));
 		ns(Globals_rts_add(B, gcfg.RTSThreshold));
 		ns(Globals_scan_dfs_add(B, gcfg.scanDFSTime));
@@ -794,6 +795,7 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.probeDelay = ns(Globals_probe_delay(gt));
 	gcfg.regDomain = ns(Globals_regdomain(gt));
 	gcfg.roamPeriod = ns(Globals_roam_period(gt));
+	gcfg.roamPeriodms = ns(Globals_roam_periodms(gt));
 	gcfg.roamTrigger = ns(Globals_roam_trigger(gt));
 	gcfg.RTSThreshold = ns(Globals_rts(gt));
 	gcfg.scanDFSTime = ns(Globals_scan_dfs(gt));
