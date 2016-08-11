@@ -43,67 +43,67 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 	switch(ret) {
 		case ns(Handshake_type_hash):
 			if(ns(Handshake_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Status_type_hash):
 			if(ns(Status_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Command_type_hash):
 			if(ns(Command_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(U32_type_hash):
 			if(ns(U32_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Version_type_hash):
 			if(ns(Version_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Globals_type_hash):
 			if(ns(Globals_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Profile_type_hash):
 			if(ns(Profile_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(P_entry_type_hash):
 			if(ns(P_entry_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Profile_list_type_hash):
 			if(ns(Profile_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Time_type_hash):
 			if(ns(Time_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
 		case ns(Filexfer_type_hash):
 			if(ns(Filexfer_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
 			break;
@@ -767,6 +767,12 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	SDCGlobalConfig gcfg = {0};
 	int ret;
 
+	GetGlobalSettings(&gcfg); // not all values are settable via the host
+	                          // ie - some values are not supported on the
+	                          // current hardware. Pull the current settings
+	                          // so any values that are not set from this
+	                          // call remain the same (and remain valid)
+
 	//TODO we ought to do some assertion that the cmd_table is a globals
 	gt = ns(Command_cmd_pl(cmd));
 
@@ -799,6 +805,9 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.DFSchannels = ns(Globals_dfs_channels(gt));
 
 	SDKUNLOCK(sdk_lock);
+
+	ret = SetGlobalSettings(&gcfg);
+	if(ret) DBGERROR("SetGlobalsettings() returned %d at line %d\n", ret, __LINE__);
 
 	build_handshake_ack(B, ret);
 	return 0;
@@ -1403,7 +1412,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 
 	buftype = verify_buffer(buf, nbytes);
 	if (buftype==0){
-		DBGERROR("could not verify buffer.  Sending NACK\n");
+		DBGERROR("could not verify buffer.  Sending NACK - line:%d\n",__LINE__);
 		ret = DCAL_FLATBUFF_VALIDATION_FAIL;
 		goto respond_with_nack;
 	}
