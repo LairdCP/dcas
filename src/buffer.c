@@ -791,6 +791,8 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.defAdhocChannel = ns(Globals_def_adhoc(gt));
 	if (ns(Globals_fips(gt)))
 		gcfg.suppInfo |= SUPPINFO_FIPS;
+	else
+		gcfg.suppInfo &= ~SUPPINFO_FIPS;
 	gcfg.PMKcaching = ns(Globals_pmk(gt));
 	gcfg.probeDelay = ns(Globals_probe_delay(gt));
 	gcfg.regDomain = ns(Globals_regdomain(gt));
@@ -810,6 +812,8 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 
 	ret = SetGlobalSettings(&gcfg);
 	if(ret) DBGERROR("SetGlobalsettings() returned %d at line %d\n", ret, __LINE__);
+	else
+		DBGINFO("SetGlobalSettgins() returned success\n");
 
 	build_handshake_ack(B, ret);
 	return 0;
@@ -988,13 +992,14 @@ int send_an_ack( flatcc_builder_t *B, char * buf, size_t bufsize, ssh_channel ch
 
 	if (nbytes <= 0) {
 		flatcc_builder_clear(B);
+		DBGERROR("an error unrecoverable error was sent to client from line %d\n", -nbytes);
 		ret = DCAL_FLATBUFF_ERROR;
 		build_handshake_ack(B, ret);
 	}else {
 		w = ssh_channel_write(chan, buf, nbytes);
 		if (nbytes != w){
 			DBGERROR("Failure to send buffer from %s\n", __func__);
-			ret = -1;
+			ret = -__LINE__;
 		}
 	}
 	return ret;
@@ -1061,7 +1066,7 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 			r = ssh_channel_read(chan, buf, BUF16K, 0);
 			if(r==SSH_ERROR){
 				DBGERROR("Failure to read ssh buffer\n");
-				ret =-1;
+				ret =-__LINE__;
 				goto closefile;
 			} else if (r==0)
 				break;
@@ -1178,7 +1183,7 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 		w = ssh_channel_write(chan, buf, size);
 		if (size != w){
 				DBGERROR("Failure to send buffer from %s\n", __func__);
-				ret = -1;
+				ret = -__LINE__;
 				goto cleanup;
 		}
 
@@ -1202,7 +1207,7 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 				DBGERROR("Failure to send buffer from %s\n", __func__);
 				DBGERROR("Bytes from from file: %d\n"
 				         "Bytes written to chan: %d\n", r, w);
-				ret = -1;
+				ret = -__LINE__;
 				goto cleanup;
 			}
 
