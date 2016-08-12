@@ -788,6 +788,8 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH);
 	if(ns(Globals_date_check(gt)))
 		gcfg.suppInfo |= SUPPINFO_TLS_TIME_CHECK;
+	else
+		gcfg.suppInfo &= ~SUPPINFO_TLS_TIME_CHECK;
 	gcfg.defAdhocChannel = ns(Globals_def_adhoc(gt));
 	if (ns(Globals_fips(gt)))
 		gcfg.suppInfo |= SUPPINFO_FIPS;
