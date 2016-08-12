@@ -882,7 +882,7 @@ int validate_fqdn(char *str)
 	len = strlen(str);
 
 	for (i=0; i<len; i++)
-		if (!in_valid_set(str[i]))
+		if (in_valid_set(str[i])==1)
 			return 1;
 
 	return 0;
@@ -903,8 +903,8 @@ int do_issue_ntpdate(flatcc_builder_t *B, ns(Command_table_t) ct)
 	if (((char*)ns(String_value(string)))==NULL)
 		return DCAL_INVALID_PARAMETER;
 
-	if(!validate_fqdn(((char*)ns(String_value(string)))))
-		return DCAL_INVALID_PARAMETER;
+	if(validate_fqdn(((char*)ns(String_value(string))))==1)
+		return DCAL_FQDN_FAILURE;
 
 #define NTPDATE "/usr/bin/ntpdate "
 	commandline = (char*)malloc(strlen(NTPDATE)+
