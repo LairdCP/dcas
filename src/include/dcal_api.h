@@ -66,6 +66,7 @@ typedef enum _DCAL_ERR{
 	DCAL_DATA_STALE,
 	DCAL_LOCAL_FILE_ACCESS_DENIED,
 	DCAL_REMOTE_FILE_ACCESS_DENIED,
+	DCAL_FQDN_FAILURE,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -300,10 +301,17 @@ typedef enum _regulatory_domain{
 int dcal_wifi_global_get_regdomain( laird_global_handle global,
                                     REG_DOMAIN *regdomain);
 
+// 40 and 45 series radios allow setting roamperiod
 int dcal_wifi_global_set_roam_period( laird_global_handle global,
                                       unsigned int roam_period);
 int dcal_wifi_global_get_roam_period( laird_global_handle global,
                                       unsigned int *roam_period);
+
+// 50 series radios allow setting roamperiodms
+int dcal_wifi_global_set_roam_periodms( laird_global_handle global,
+                                      unsigned int roam_periodms);
+int dcal_wifi_global_get_roam_periodms( laird_global_handle global,
+                                      unsigned int *roam_periodms);
 
 int dcal_wifi_global_set_roam_trigger( laird_global_handle global,
                                        unsigned int roam_trigger);
