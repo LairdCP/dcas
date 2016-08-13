@@ -847,9 +847,11 @@ int do_system_command(flatcc_builder_t *B, char *commandline)
 				ret = DCAL_WB_GENERAL_FAIL;
 			}
 			else
-				ret = WEXITSTATUS(ret);
+				ret =(WEXITSTATUS(ret)?DCAL_REMOTE_SHELL_CMD_FAILURE:DCAL_SUCCESS);
 		}
 	}
+
+	DBGERROR("Command return code: %d\n", ret);
 
 	build_handshake_ack(B, ret);
 	return 0;
@@ -939,8 +941,10 @@ int do_get_time(flatcc_builder_t *B)
 		ns(Time_tv_usec_add(B, tv.tv_usec));
 
 		ns(Time_end_as_root(B));
-	} else
+	} else {
+		DBGERROR("gettimeofday() failed with %s\n",strerror(errno));
 		build_handshake_ack(B, DCAL_WB_GENERAL_FAIL);
+	}
 
 	return 0;
 }
@@ -960,8 +964,11 @@ int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
 	tv.tv_sec = ns(Time_tv_sec(tt));
 	tv.tv_usec = ns(Time_tv_usec(tt));
 
-	if (settimeofday(&tv, NULL))
+	if (settimeofday(&tv, NULL)) {
 		ret = DCAL_WB_GENERAL_FAIL;
+		DBGERROR("settimeofday() failed with %s\n",strerror(errno));
+		DBGERROR("called with (%d,%d)\n", ns(Time_tv_sec(tt)), ns(Time_tv_usec(tt)));
+	}
 
 	build_handshake_ack(B, ret);
 	return 0;
@@ -981,7 +988,9 @@ char *strdup(const char *src)
 	copy[len]=0;
 	return copy;
 }
-#define BUF16K 16384
+
+#define SZ_1K 1024
+#define FILEBUFSZ (SZ_1K * 128)
 
 		//send start ack
 int send_an_ack( flatcc_builder_t *B, char * buf, size_t bufsize, ssh_channel chan, int error)
@@ -1043,12 +1052,12 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 			filename = strdup(basename(full_path));
 
 		full_file_path = malloc(strlen(path)+strlen(filename)+2);
-		buf = malloc(BUF16K);
+		buf = malloc(FILEBUFSZ);
 		if ((!full_file_path)||!(buf)) {
 			ret = DCAL_NO_MEMORY;
 			goto cleanup;
 		}
-		memset(buf, 0, BUF16K);
+		memset(buf, 0, FILEBUFSZ);
 		sprintf(full_file_path,"%s/%s",path,filename);
 		DBGINFO("incoming file to be saved to: %s\n",full_file_path);
 
@@ -1058,14 +1067,14 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 			goto cleanup;
 		}
 
-		ret=send_an_ack(B, buf, BUF16K, chan, ret);
+		ret=send_an_ack(B, buf, FILEBUFSZ, chan, ret);
 		if (ret)
 			goto closefile;
 
 		// read the file from socket, write to fs
-		memset(buf, 0, BUF16K);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each channel_read?
+		memset(buf, 0, FILEBUFSZ);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each channel_read?
 		do {
-			r = ssh_channel_read(chan, buf, BUF16K, 0);
+			r = ssh_channel_read(chan, buf, FILEBUFSZ, 0);
 			if(r==SSH_ERROR){
 				DBGERROR("Failure to read ssh buffer\n");
 				ret =-__LINE__;
@@ -1138,7 +1147,7 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 	if (!localfilename)
 		ret = DCAL_NO_MEMORY;
 	else {
-		buf = malloc(BUF16K);
+		buf = malloc(FILEBUFSZ);
 		if (!buf)
 			ret = DCAL_NO_MEMORY;
 	}
@@ -1179,7 +1188,7 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 		ns(Command_end_as_root(B));
 
 		size=flatcc_builder_get_buffer_size(B);
-		assert(size<BUF16K);
+		assert(size<FILEBUFSZ);
 		flatcc_builder_copy_buffer(B, buf, size);
 
 		w = ssh_channel_write(chan, buf, size);
@@ -1195,9 +1204,10 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 		size = stats.st_size;
 		total = 0;
 		// now read the file from fs and write to socket
-		memset(buf, 0, BUF16K);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each fread?
+		memset(buf, 0, FILEBUFSZ);  //TODO is there any security benefit for this clear, or if placed inside the loop to be cleared before each fread?
 		do {
-			r = fread(buf, 1, BUF16K, file);
+
+			r = fread(buf, 1, FILEBUFSZ, file);
 			if(r==0) break;
 			else if (r<0){
 				DBGERROR("Error reading file: %s\n", localfilename);
@@ -1252,10 +1262,12 @@ int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *
 #define FWU_DISABLE_REBOOT_F   " -xr"
 #define FWU_DISABLE_NOTIFY_F   "n"
 #define FWU_DISABLE_TRANSFER_F "t"
+#define DEBUGFILE " > /tmp/fw_update.out"
 
 	cmdlinelen = strlen(FWUPDATE)+
 	              strlen(FWTXT)+
-	              strlen(FWU_DISABLE_REBOOT_F) + 1;
+	              strlen(FWU_DISABLE_REBOOT_F) + 1
+	              + strlen(DEBUGFILE);
 
 	flags = ns(U32_value(u32));
 
@@ -1272,13 +1284,14 @@ int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *
 	if (commandline==NULL)
 		return DCAL_WB_INSUFFICIENT_MEMORY;
 
-	sprintf(commandline, "%s%s%s%s%s%s",
+	sprintf(commandline, "%s%s%s%s%s%s%s",
 	               FWUPDATE,
 	               FWTXT,
 	               (flags & FWU_FORCE)?FWU_FORCE_F:"",
 	               FWU_DISABLE_REBOOT_F,
 	               (flags & FWU_DISABLE_NOTIFY)?FWU_DISABLE_NOTIFY_F:"",
-	               (flags & FWU_DISABLE_TRANSFER)?FWU_DISABLE_TRANSFER_F:"");
+	               (flags & FWU_DISABLE_TRANSFER)?FWU_DISABLE_TRANSFER_F:"",
+	               DEBUGFILE);
 
 	ret = do_system_command(B, commandline);
 	free(commandline);
@@ -1322,13 +1335,13 @@ int do_process_cli_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mu
 
 #define SDCCLI "/usr/bin/sdc_cli < "
 	commandline = (char*)malloc(strlen(SDCCLI)+
-		                    strlen((char*)ns(String_value(string)))+2);
+		                    strlen(filename)+2);
 	if (commandline==NULL){
 		ret = DCAL_WB_INSUFFICIENT_MEMORY;
 		goto cleanup;
 	}
 
-	sprintf(commandline, "%s%s", SDCCLI, (char*)ns(String_value(string)));
+	sprintf(commandline, "%s%s", SDCCLI, filename);
 
 	ret = do_system_command(B, commandline);
 
@@ -1352,10 +1365,10 @@ int do_get_logs(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *s
 
 	commandline = "/usr/bin/log_dump";
 
-	ret = do_system_command(B, commandline);
+//remove any pre-existing logfile
+	remove("/tmp/log_dump.txt");
 
-	if (ret == DCAL_SUCCESS)
-		ret = do_send_file(B, NULL, "/tmp/log_dump.txt", sdk_lock, chan);
+	ret = do_system_command(B, commandline);
 
 	return ret;
 }
@@ -1451,7 +1464,7 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			return do_process_cli_file(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_GETLOGS):
-			DBGDEBUG("GETLOGS");
+			DBGDEBUG("GETLOGS\n");
 			return do_get_logs(B, cmd, sdk_lock, chan);
 			break;
 		default:
