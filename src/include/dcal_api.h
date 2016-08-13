@@ -67,6 +67,7 @@ typedef enum _DCAL_ERR{
 	DCAL_LOCAL_FILE_ACCESS_DENIED,
 	DCAL_REMOTE_FILE_ACCESS_DENIED,
 	DCAL_FQDN_FAILURE,
+	DCAL_REMOTE_SHELL_CMD_FAILURE,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -598,7 +599,7 @@ int dcal_fw_update(laird_session_handle session, int flags);
 int dcal_pull_logs(laird_session_handle session, char * dest_file);
 
 // src_file is full location and file name where command file resides.
-int dcal_process_cli_command_list(laird_session_handle session, char * src_file);
+int dcal_process_cli_command_file(laird_session_handle session, char * src_file);
 
 // misc
 
