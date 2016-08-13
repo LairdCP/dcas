@@ -68,6 +68,8 @@ typedef enum _DCAL_ERR{
 	DCAL_REMOTE_FILE_ACCESS_DENIED,
 	DCAL_FQDN_FAILURE,
 	DCAL_REMOTE_SHELL_CMD_FAILURE,
+	DCAL_RADIO_DISABLED,
+	DCAL_INDEX_OUT_OF_BOUNDS,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -369,10 +371,34 @@ int dcal_wifi_global_get_dfs_channels( laird_global_handle global,
 
 void dcal_wifi_global_printf( laird_global_handle global);
 
+// Wifi Scan
+int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
+int dcal_wifi_get_scan_list_entry_ssid(laird_session_handle session,
+                                  int index, LRD_WF_SSID *ssid);
+int dcal_wifi_get_scan_list_entry_bssid(laird_session_handle session,
+                                  int index, char * bssid, int bssidbuflen);
+int dcal_wifi_get_scan_list_entry_channel(laird_session_handle session,
+                                  int index, int * channel);
+int dcal_wifi_get_scan_list_entry_rssi(laird_session_handle session,
+                                  int index, int * rssi);
+int dcal_wifi_get_scan_list_entry_securityMask(laird_session_handle session,
+                                  int index, int * securityMask);
+#ifndef _SDC_SDK_H_
+typedef enum _LRD_WF_BSSTYPE {
+    INFRASTRUCTURE = 0,
+    ADHOC
+} LRD_WF_BSSTYPE;
+#endif
+int dcal_wifi_get_scan_list_entry_type(laird_session_handle session,
+                                  int index, LRD_WF_BSSTYPE * bssType);
+
 // WiFi Profile Management_
 // both the create and pull functions will allocate a laird_profile_handle
 // that require the close_handle function to be called when done with then
 // handle
+int dcal_wifi_pull_profile_list(laird_session_handle session, size_t *count);
+int dcal_wifi_get_profile_list_entry(laird_session_handle session, int index, char * profilename, size_t buflen, bool *autoprofile, bool * active);
+
 int dcal_wifi_profile_create( laird_profile_handle * profile);
 int dcal_wifi_profile_pull( laird_session_handle session,
                                  laird_profile_handle * profile,
@@ -396,7 +422,7 @@ int dcal_wifi_profile_set_profilename(laird_profile_handle profile,
 int dcal_wifi_profile_get_profilename(laird_profile_handle profile,
                                            char * profilename );
 
-// note the SSID is not a string as SSIDs can contain embedded non-ascii
+// note the SSID is not a string, as SSIDs can contain embedded non-ascii
 // characters including embedded nulls  (the SDK on the device may not yet
 // support non-ascii characters but handling it as if it can will allow us
 // future capabilities)
