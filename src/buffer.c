@@ -32,6 +32,11 @@
 #define SDKUNLOCK(x) (pthread_mutex_unlock(x))
 #define TMPDIR "/tmp"
 
+#define safe_free(x) do{if(x){free(x); x=NULL;}}while (0)
+
+#define SZ_1K 1024
+#define FILEBUFSZ (SZ_1K * 128)
+
 // a 0 return code means invalid buffer
 flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 {
@@ -107,6 +112,18 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
+		case ns(Scan_item_type_hash):
+			if(ns(Scan_item_verify_as_root(buf,size))){
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
+				ret = 0;
+				}
+			break;
+		case ns(Scan_list_type_hash):
+			if(ns(Scan_item_verify_as_root(buf,size))){
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
+				ret = 0;
+				}
+			break;
 		default:
 			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
 			ret = 0;
@@ -149,6 +166,12 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 			break;
 		case ns(Filexfer_type_hash):
 			return "Filexfer";
+			break;
+		case ns(Scan_item_type_hash):
+			return "Scan_item";
+			break;
+		case ns(Scan_list_type_hash):
+			return "Scan_list";
 			break;
 
 		default:
@@ -666,7 +689,126 @@ int do_del_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 //negative value - unrecoverable error
 int do_get_profile_list(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 {
-	return SDCERR_NOT_IMPLEMENTED;
+	SDCConfig *cfgs = NULL;
+	unsigned long count = 0;
+	int i, ret = SDCERR_SUCCESS;
+	char currentcfgname[CONFIG_NAME_SZ];
+
+	cfgs=malloc(MAX_CFGS*sizeof(SDCConfig));
+	if (cfgs==NULL)
+		return SDCERR_INSUFFICIENT_MEMORY;
+
+	ret = GetAllConfigs(cfgs, &count);
+	if (ret)
+		return ret;
+
+	ret = GetCurrentConfig(NULL, currentcfgname);
+	if (ret) {
+		DBGERROR("GetCurrentConfig() returned %d\n", ret);
+		return ret;
+	}
+
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Profile_list_type_identifier));
+	ns(Profile_list_start(B));
+	ns(Profile_list_profiles_start(B));
+
+	for (i=0; i<count; i++) {
+		unsigned char apStatus;
+		unsigned char active;
+		LRD_WF_AutoProfileCfgStatus(cfgs[i].configName, &apStatus);
+		active = !strncmp(currentcfgname, cfgs[i].configName, CONFIG_NAME_SZ);
+
+		ns(Profile_list_profiles_push_start(B));
+		ns(P_entry_name_create_str(B, cfgs[i].configName));
+		ns(P_entry_active_add(B, active));
+		ns(P_entry_autoprof_add(B, apStatus));
+		ns(Profile_list_profiles_push_end(B));
+
+	}
+	ns(Profile_list_profiles_end(B));
+	ns(Profile_list_end_as_root(B));
+
+	return ret;
+}
+
+#define LRD_WF_BSSID_LIST_ALLOC(numEntries) (sizeof(unsigned long) \
+                           + (numEntries * sizeof(LRD_WF_SCAN_ITEM_INFO)))
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_get_scanlist (flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
+{
+	unsigned long count = 0;
+	static int initial_num_entries = 250;
+	int i, num_entries, ret = SDCERR_SUCCESS;
+	int again = 1;
+	CF10G_STATUS status;
+	LRD_WF_BSSID_LIST *list;
+	LRD_WF_SCAN_ITEM_INFO *bss;
+
+	ret = GetCurrentStatus(&status);
+	if (ret)
+		return ret;
+
+	if (status.cardState==CARDSTATE_DISABLED)
+		return DCAL_RADIO_DISABLED;
+
+	list=(LRD_WF_BSSID_LIST*)malloc(LRD_WF_BSSID_LIST_ALLOC(initial_num_entries));
+	if (list==NULL)
+		return SDCERR_INSUFFICIENT_MEMORY;
+
+	memset(list, 0, LRD_WF_BSSID_LIST_ALLOC(initial_num_entries));
+
+	do {
+		num_entries = initial_num_entries;
+		ret = LRD_WF_GetBSSIDList(list, &num_entries);
+
+		if (ret==SDCERR_INSUFFICIENT_MEMORY) {
+			if (num_entries==-1)
+				goto cleanup;
+
+			initial_num_entries = num_entries * 1.25;  // 125% of request
+			                                           // Keep it in static var
+			                                           // for next time
+			DBGINFO("increased scan elements to %d\n", initial_num_entries);
+			safe_free(list);
+			continue;
+		}
+	} while (again--);
+
+	if (ret) goto cleanup;
+
+	DBGINFO("Scan items: %lu\n", list->NumberOfItems);
+
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Scan_list_type_identifier));
+	ns(Scan_list_start(B));
+	ns(Scan_list_items_start(B));
+
+	for (i=0; i<list->NumberOfItems; i++) {
+		bss = &list->Bssid[i];
+		DBGINFO("%d: %s on channel %d\n", i, bss->ssid.val, bss->channel);
+		ns(Scan_list_items_push_start(B));
+		ns(Scan_item_channel_add(B, bss->channel));
+		ns(Scan_item_rssi_add(B, bss->rssi));
+		ns(Scan_item_securityMask_add(B, bss->securityMask));
+		ns(Scan_item_bss_add(B, bss->bssType));
+		ns(Scan_item_mac_create(B, bss->bssidMac, MAC_SZ));
+		ns(Scan_item_ssid_create(B, bss->ssid.val, bss->ssid.len));
+		ns(Scan_list_items_push_end(B));
+
+	}
+DUMPLOCATION;
+	ns(Scan_list_items_end(B));
+	ns(Scan_list_end_as_root(B));
+
+cleanup:
+	safe_free(list);
+
+	return ret;
 }
 
 //return codes:
@@ -713,7 +855,7 @@ int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	unsigned char apStatus = 0;
 
 	ret = GetGlobalSettings(&gcfg);
-	
+
 	if (ret)
 		build_handshake_ack(B, ret);
 	else
@@ -727,7 +869,6 @@ int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		LRD_WF_AutoProfileStatus(&apStatus);
 		SDKUNLOCK(sdk_lock);
 
-	//	ns(Profile_security5_create_str(B, "1"));
 		ns(Globals_auth_add(B, gcfg.authServerType));
 		ns(Globals_channel_set_a_add(B, gcfg.aLRS));
 		ns(Globals_channel_set_b_add(B, gcfg.bLRS));
@@ -974,7 +1115,6 @@ int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
 	return 0;
 }
 
-#define safe_free(x) do{if(x){free(x); x=NULL;}}while (0)
 char *strdup(const char *src)
 {
 	if (src==NULL)
@@ -988,9 +1128,6 @@ char *strdup(const char *src)
 	copy[len]=0;
 	return copy;
 }
-
-#define SZ_1K 1024
-#define FILEBUFSZ (SZ_1K * 128)
 
 		//send start ack
 int send_an_ack( flatcc_builder_t *B, char * buf, size_t bufsize, ssh_channel chan, int error)
@@ -1447,6 +1584,10 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			DBGDEBUG("GETPROFILELIST\n");
 			return do_get_profile_list(B, sdk_lock);
 			break;
+		case ns(Commands_GETSCANLIST):
+			DBGDEBUG("GETSCANLIST");
+			return do_get_scanlist(B, sdk_lock);
+			break;
 		case ns(Commands_FILEPUSH):
 			DBGDEBUG("FILEPUSH\n");
 			return do_receive_file(B, cmd, sdk_lock, chan);
@@ -1542,7 +1683,8 @@ respond_with_nack:
 respond_normal:
 	flatcc_builder_copy_buffer(&builder, buf, buf_size);
 	nbytes =flatcc_builder_get_buffer_size(&builder);
-	DBGDEBUG("Created response buffer size: %zd\n", nbytes);
+	DBGDEBUG("Created response buffer type: %s; size: %zd\n",
+	           buftype_to_string(verify_buffer(buf, nbytes)), nbytes);
 	//hexdump("outbound buffer", buf, nbytes, stdout);
 respond_with_error: // allow for exit with 0 or negative return
 	flatcc_builder_clear(&builder);

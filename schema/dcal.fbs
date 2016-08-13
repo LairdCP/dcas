@@ -118,6 +118,19 @@ table Profile_list {
 	profiles:[P_entry];
 }
 
+table Scan_item {
+	channel: ubyte;
+	rssi: int;
+	securityMask: uint;
+	bss: bool; // false == infrastructure; true == adhoc
+	mac: [ubyte];
+	ssid: [ubyte];
+}
+
+table Scan_list {
+	items: [Scan_item];
+}
+
 table Time {
 	tv_sec: int;
 	tv_usec: int;
@@ -142,6 +155,7 @@ enum Commands:uint {
 	SETPROFILE,
 	DELPROFILE,
 	GETPROFILELIST,
+	GETSCANLIST,
 	ACTIVATEPROFILE,
 	WIFIENABLE,
 	WIFIDISABLE,
