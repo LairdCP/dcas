@@ -70,6 +70,7 @@ typedef enum _DCAL_ERR{
 	DCAL_REMOTE_SHELL_CMD_FAILURE,
 	DCAL_RADIO_DISABLED,
 	DCAL_INDEX_OUT_OF_BOUNDS,
+	DCAL_BUFFER_TOO_SMALL,
 } DCAL_ERR;
 
 typedef char * FQDN;
@@ -376,7 +377,7 @@ int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
 int dcal_wifi_get_scan_list_entry_ssid(laird_session_handle session,
                                   int index, LRD_WF_SSID *ssid);
 int dcal_wifi_get_scan_list_entry_bssid(laird_session_handle session,
-                                  int index, char * bssid, int bssidbuflen);
+                         int index, unsigned char * bssid, int bssidbuflen);
 int dcal_wifi_get_scan_list_entry_channel(laird_session_handle session,
                                   int index, int * channel);
 int dcal_wifi_get_scan_list_entry_rssi(laird_session_handle session,
