@@ -801,7 +801,6 @@ int do_get_scanlist (flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		ns(Scan_list_items_push_end(B));
 
 	}
-DUMPLOCATION;
 	ns(Scan_list_items_end(B));
 	ns(Scan_list_end_as_root(B));
 
@@ -1688,5 +1687,8 @@ respond_normal:
 	//hexdump("outbound buffer", buf, nbytes, stdout);
 respond_with_error: // allow for exit with 0 or negative return
 	flatcc_builder_clear(&builder);
+
+	buftype = verify_buffer(buf, nbytes);
+	DBGINFO("outbound buf hash: %x; is type %s\n", flatbuffers_get_type_hash(buf), buftype_to_string( buftype ));
 	return nbytes;
 }

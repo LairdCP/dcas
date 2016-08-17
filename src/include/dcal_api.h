@@ -81,7 +81,8 @@ typedef void * laird_global_handle;
 
 #define MAC_SZ 6
 #define IP4_SZ 4
-#define IP6_STR_SZ 46 //max string:0000:0000:0000:0000:0000:0000:xxx.xxx.xxx.xxx plus NULL (IPV4 mapped IPV6 address)
+#define IP6_STR_SZ 46 //max string:0000:0000:0000:0000:0000:0000:xxx.xxx.xxx.xxx plus NULL
+                      //(IPV4 mapped IPV6 address)
 #define NAME_SZ 48
 #ifndef SSID_SZ
 #define SSID_SZ 32
@@ -114,11 +115,11 @@ int dcal_get_dcas_version(laird_session_handle session,
 int dcal_get_dcal_version(laird_session_handle session,
                               unsigned int *dcal);
 int dcal_get_firmware_version(laird_session_handle session,
-                              char *firmware);
+                              char *firmware, size_t buflen);
 int dcal_get_supplicant_version(laird_session_handle session,
-                              char *supplicant);
+                              char *supplicant, size_t buflen);
 int dcal_get_release_version(laird_session_handle session,
-                              char *release);
+                              char *release, size_t buflen);
 
 // Device Status
 int dcal_device_status_pull( laird_session_handle session);
@@ -126,25 +127,32 @@ int dcal_device_status_pull( laird_session_handle session);
 // things that are fairly static
 int dcal_device_status_get_settings( laird_session_handle session,
                                      char * profilename,
-                                     char * ssid,
-                                     unsigned int * ssid_len,
-                                     unsigned char *mac);
+                                     size_t profilename_buflen,
+                                     LRD_WF_SSID *ssid,
+                                     unsigned char *mac,
+                                     size_t mac_buflen);
 // things that are ccx related
 int dcal_device_status_get_ccx( laird_session_handle session,
                                        unsigned char *ap_ip,
+                                       size_t ap_ip_buflen,
                                        char *ap_name,
-                                       char * clientname);
+                                       size_t ap_name_buflen,
+                                       char * clientname,
+                                       size_t clientname_buflen);
 // tcp stack related
 int dcal_device_status_get_tcp( laird_session_handle session,
                                        unsigned char *ipv4,
-                                       char *ipv6);
+                                       size_t pv4_buflen,
+                                       char *ipv6,
+                                       size_t ipv6_buflen);
 
 // things that could change moment to moment
 int dcal_device_status_get_connection( laird_session_handle session,
                                        unsigned int * cardstate,
                                        unsigned int * channel,
                                        int * rssi,
-                                       unsigned char *ap_mac);
+                                       unsigned char *ap_mac,
+                                       size_t ap_mac_buflen);
 
 int dcal_device_status_get_connection_extended( laird_session_handle session,
                                        unsigned int *bitrate,
@@ -398,7 +406,9 @@ int dcal_wifi_get_scan_list_entry_type(laird_session_handle session,
 // that require the close_handle function to be called when done with then
 // handle
 int dcal_wifi_pull_profile_list(laird_session_handle session, size_t *count);
-int dcal_wifi_get_profile_list_entry(laird_session_handle session, int index, char * profilename, size_t buflen, bool *autoprofile, bool * active);
+int dcal_wifi_get_profile_list_entry_profilename(laird_session_handle session, int index, char * profilename, size_t buflen);
+int dcal_wifi_get_profile_list_entry_autoprofile(laird_session_handle session, int index, bool *autoprofile);
+int dcal_wifi_get_profile_list_entry_active(laird_session_handle session, int index, bool * active);
 
 int dcal_wifi_profile_create( laird_profile_handle * profile);
 int dcal_wifi_profile_pull( laird_session_handle session,
@@ -421,7 +431,7 @@ int dcal_wifi_profile_delete_from_device( laird_session_handle session,
 int dcal_wifi_profile_set_profilename(laird_profile_handle profile,
                                            char * profilename );
 int dcal_wifi_profile_get_profilename(laird_profile_handle profile,
-                                           char * profilename );
+                                      char * profilename, size_t buflen );
 
 // note the SSID is not a string, as SSIDs can contain embedded non-ascii
 // characters including embedded nulls  (the SDK on the device may not yet
@@ -528,7 +538,7 @@ int dcal_wifi_profile_get_wep_txkey( laird_profile_handle profile,
 int dcal_wifi_profile_set_clientname( laird_profile_handle profile,
                                 char * clientname);
 int dcal_wifi_profile_get_clientname( laird_profile_handle profile,
-                                char * clientname_buffer);
+                                char * clientname_buffer, size_t buflen);
 
 int dcal_wifi_profile_set_radiomode( laird_profile_handle profile,
                                 RADIOMODE mode);
