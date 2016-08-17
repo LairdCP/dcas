@@ -148,25 +148,35 @@ static int authenticate(ssh_session session)
 void * ssh_session_thread( void *param )
 {
 	ssh_message message;
-	ssh_channel chan=0;
-	char buf[BUFSIZE];
-	int auth=0;
+	process_buf_struct buf_struct = {0};
+	slsh_channel chan=0;
+	int nbytes, auth=0;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
-	bool *alive, *exit_called;
+	bool *alive;
 	ssh_session session;
-	size_t nwritten;
-	int nbytes;
+	size_t nwritten, *const buf_size = &buf_struct.buf_size;
+	char **const buf = &buf_struct.buf;
 
 	alive = dispatch_data->alive;     //read only. Only set by dispatch or signal catch
-	exit_called = dispatch_data->exit_called;
 	session = dispatch_data->session; //we will be responsible for session now
 	dispatch_data->session = NULL;    //ensure no other thread points to this
 	sem_post(&dispatch_data->thread_init);  // signal dispatch routine thread
 	                                        // that we've copied the pointer
 	                                        // from it's stack data
 
+	buf_struct.buf = malloc(INITIAL_BUFSIZE);
+	buf_struct.buf_size = INITIAL_BUFSIZE;
+	buf_struct.exit_called = dispatch_data->exit_called;
+	buf_struct.sdk_lock = &dispatch_data->sdk_lock;
+	buf_struct.verify_handshake = true;
+
 	if (ssh_handle_key_exchange(session)) {
-		DBGERROR("ssh_void handle_key_exchange: %s\n", ssh_get_error(session));
+		DBGERROR("Error: ssh_void handle_key_exchange: %s\n", ssh_get_error(session));
+		goto exit_session;
+	}
+
+	if(*buf==NULL) {
+		DBGERROR("Error: Unable to malloc buffer size:%d\n", INITIAL_BUFSIZE);
 		goto exit_session;
 	}
 
@@ -185,6 +195,7 @@ void * ssh_session_thread( void *param )
 			if(ssh_message_type(message) == SSH_REQUEST_CHANNEL_OPEN &&
 			    ssh_message_subtype(message) == SSH_CHANNEL_SESSION) {
 				chan = ssh_message_channel_request_open_reply_accept(message);
+				buf_struct.chan = chan;
 				ssh_message_free(message);
 				break;
 			} else {
@@ -209,13 +220,44 @@ void * ssh_session_thread( void *param )
 
 	DBGDEBUG("Client connected!\n");
 
-	bool verify_handshake = true;
+	int extra;
 	do {
-		nbytes=ssh_channel_read(chan,buf, BUFSIZE, 0);
+		nbytes=ssh_channel_read(chan,*buf, *buf_size, 0);
+		if(nbytes >0)
+		while ((extra=ssh_channel_poll(chan, 0)) > 0) {
+			char * tmp = realloc(*buf, *buf_size+extra);
+
+			if (!tmp){
+				DBGERROR("Error: could not realloc buffer size\n");
+				goto exit_channel;
+			}
+
+			DBGINFO(" buffer size increased by %d for channel read\n", extra);
+
+			// store modified memory pointer
+			*buf = tmp;
+
+			// move tmp to start of extended space
+			tmp = *buf+*buf_size;
+
+			*buf_size += extra;
+
+			// read into extra space of buff up to extra number of characters
+			extra = ssh_channel_read(chan,tmp, extra, 0);
+			if (extra > 0)
+				nbytes += extra;
+			else {
+				// either EOF or error
+				nbytes = 0;
+				break;
+			}
+		}
+
 		if(nbytes>0) {
 			DBGINFO("Got %d bytes from client:\n", nbytes);
 
-			nbytes = process_buffer(buf, sizeof(buf), nbytes, &dispatch_data->sdk_lock, verify_handshake, exit_called, chan);
+			buf_struct.size_used = nbytes;
+			nbytes = process_buffer(&buf_struct);
 
 			if (nbytes<0){
 				DBGERROR("error in process_bufer(): %d\n", nbytes);
@@ -225,19 +267,20 @@ void * ssh_session_thread( void *param )
 				DBGINFO("no command received - no outbound buffer\n");//no-op
 			}
 			else{
-				nwritten = ssh_channel_write(chan, buf, nbytes);
+				nwritten = ssh_channel_write(chan,*buf, nbytes);
+				DBGINFO("Wrote %zu bytes\n", nwritten);
 				if (nwritten != nbytes){
 					DBGERROR("Failure to send buffer\n");
 					goto exit_channel;
 				}
-				verify_handshake = false;
+				buf_struct.verify_handshake = false;
 			}
 		}
 		if ((nbytes==SSH_AGAIN) && (*alive))
 			continue;
 	} while ((nbytes>0) && (*alive));
 
-	if (*exit_called)
+	if (*buf_struct.exit_called)
 		DBGINFO("system restart requested\n");
 	else
 		DBGDEBUG("Read thread exiting due to EOF on channel\n");
@@ -250,11 +293,13 @@ exit_disconnect:
 exit_session:
 	ssh_free(session);
 	session = NULL;
+	if(buf_struct.buf)
+		free(buf_struct.buf);
 
 	add_thread_to_completed_list( &dispatch_data->completed,
 	                               pthread_self());
 	sem_post(dispatch_data->thread_list);
-	if (*exit_called)
+	if (*buf_struct.exit_called)
 		kill(getpid(), SIGINT);
 	DBGDEBUG("thread exiting\n");
 	return NULL;

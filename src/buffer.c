@@ -733,7 +733,7 @@ int do_get_profile_list(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 }
 
 #define LRD_WF_BSSID_LIST_ALLOC(numEntries) (sizeof(unsigned long) \
-                           + (numEntries * sizeof(LRD_WF_SCAN_ITEM_INFO)))
+                          + ((numEntries) * sizeof(LRD_WF_SCAN_ITEM_INFO)))
 
 //return codes:
 //0 - success
@@ -1622,16 +1622,19 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 // recoverable error is handled by putting a NACK in the return buffer
 // and the error in the returned handshake table
 
-int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called, ssh_channel chan)
+int process_buffer(process_buf_struct * buf_struct)
+//int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called, ssh_channel chan)
 {
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);
-	int ret;
+	int ret, nbytes;
 	flatbuffers_thash_t buftype;
+	char ** const buf = &buf_struct->buf;
+	size_t * const buf_size = &buf_struct->buf_size;
 
+	//TODO: enable hexdump for most verbose debug setting
 	//hexdump("read buffer", buf, nbytes, stdout);
-
-	buftype = verify_buffer(buf, nbytes);
+	buftype = verify_buffer(*buf, *buf_size);
 	if (buftype==0){
 		DBGERROR("could not verify buffer.  Sending NACK - line:%d\n",__LINE__);
 		ret = DCAL_FLATBUFF_VALIDATION_FAIL;
@@ -1640,8 +1643,8 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 
 	DBGINFO("incoming buffer has type: %s\n", buftype_to_string(buftype));
 
-	if ((must_be_handshake) && (buftype != ns(Handshake_type_hash))){
-		DBGERROR("wanted a handshake but this is: %s\n", buftype_to_string(buftype));
+	if ((buf_struct->verify_handshake) && (buftype != ns(Handshake_type_hash))){
+		DBGERROR("wanted a handshake but this has type: %s\n", buftype_to_string(buftype));
 		ret = DCAL_FLATBUFF_VALIDATION_FAIL;
 		goto respond_with_nack;
 	}
@@ -1649,7 +1652,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 	switch(buftype) {
 		case ns(Handshake_type_hash):
 			DBGINFO("inbound handshake buffer received\n");
-			if (is_handshake_valid(ns(Handshake_as_root(buf)))) {
+			if (is_handshake_valid(ns(Handshake_as_root(*buf)))) {
 				DBGINFO("Got good protocol HELLO\n");
 				build_handshake_ack(&builder, 0);
 				goto respond_normal;
@@ -1660,7 +1663,7 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 			break;
 		case ns(Command_type_hash):
 			// process command
-			if ((ret=process_command(&builder, ns(Command_as_root(buf)), sdk_lock, exit_called, chan))){
+			if ((ret=process_command(&builder, ns(Command_as_root(*buf)), buf_struct->sdk_lock, buf_struct->exit_called, buf_struct->chan))){
 				// un-recoverable errors will be negative
 				if (ret > 0)
 					goto respond_with_nack;
@@ -1680,15 +1683,27 @@ int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *
 respond_with_nack:
 	build_handshake_ack(&builder, ret);
 respond_normal:
-	flatcc_builder_copy_buffer(&builder, buf, buf_size);
 	nbytes =flatcc_builder_get_buffer_size(&builder);
+	if (nbytes > *buf_size) {
+		DBGINFO("Buffer size too small - calling realloc() with size %d\n", nbytes);
+		char * tmp = realloc(*buf, nbytes);
+		if (tmp==NULL){
+			DBGERROR("Error: unable to realloc() memory\n");
+			build_handshake_ack(&builder, DCAL_NO_MEMORY);
+			goto respond_normal;  // initial buf_size is large enough for a NACK
+		}else{
+			*buf = tmp;
+			*buf_size = nbytes;
+		}
+	}
+	flatcc_builder_copy_buffer(&builder, *buf, *buf_size);
 	DBGDEBUG("Created response buffer type: %s; size: %zd\n",
-	           buftype_to_string(verify_buffer(buf, nbytes)), nbytes);
+	           buftype_to_string(verify_buffer(*buf, nbytes)), nbytes);
 	//hexdump("outbound buffer", buf, nbytes, stdout);
 respond_with_error: // allow for exit with 0 or negative return
 	flatcc_builder_clear(&builder);
 
-	buftype = verify_buffer(buf, nbytes);
+	buftype = verify_buffer(*buf, nbytes);
 	DBGINFO("outbound buf hash: %x; is type %s\n", flatbuffers_get_type_hash(buf), buftype_to_string( buftype ));
 	return nbytes;
 }
