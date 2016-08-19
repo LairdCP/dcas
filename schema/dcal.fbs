@@ -75,7 +75,6 @@ table Globals {
 	pmk: uint;
 	probe_delay: uint;
 	regdomain: uint;
-	roam_period: uint;
 	roam_periodms: uint;
 	roam_trigger: uint;
 	rts: uint;
