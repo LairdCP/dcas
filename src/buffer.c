@@ -3,15 +3,15 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/wait.h>
+#include <errno.h>
 #include <unistd.h>
 #include "debug.h"
 #include "sdc_sdk.h"
 #include "buffer.h"
+#undef SSID_SZ //TODO - use a different define so no collision on different values for same named #define
 #include "dcal_api.h"
 #include "version.h"
 
@@ -91,12 +91,6 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
-		case ns(Time_type_hash):
-			if(ns(Time_verify_as_root(buf,size))){
-				DBGERROR("%s: unable to verify buffer\n", __func__);
-				ret = 0;
-				}
-			break;
 		default:
 			DBGERROR("%s: buffer hash invalid: %lx\n", __func__, (unsigned long)ret);
 			ret = 0;
@@ -133,9 +127,6 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 			break;
 		case ns(Profile_list_type_hash):
 			return "Profile list";
-			break;
-		case ns(Time_type_hash):
-			return "Time";
 			break;
 
 		default:
@@ -795,99 +786,6 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
-int do_issue_ntpdate(flatcc_builder_t *B, ns(Command_table_t) ct)
-{
-	ns(String_table_t) string;
-	int ret = DCAL_SUCCESS;
-	string = ns(Command_cmd_pl(ct));
-	char *cmd = NULL;
-	FILE *fp = NULL;
-
-	if (((char*)ns(String_value(string)))==NULL)
-		ret = DCAL_INVALID_PARAMETER;
-	else
-	{
-#define NTPDATE "/usr/bin/ntpdate "
-		cmd = (char*)malloc(strlen(NTPDATE)+
-		                    strlen((char*)ns(String_value(string)))+2);
-		if (cmd==NULL)
-			ret = DCAL_HOST_INSUFFICIENT_MEMORY;
-		else
-		{
-			sprintf(cmd, "%s%s", NTPDATE, (char*)ns(String_value(string)));
-			DBGDEBUG("Issuing: %s\n", cmd);
-
-			fp = popen(cmd, "w");
-			if (fp==NULL) {
-				DBGDEBUG("popen error\n");
-				ret = DCAL_HOST_GENERAL_FAIL;
-			} else {
-				ret = pclose(fp);
-				if (ret == -1) {
-					DBGDEBUG("pclose error\n");
-					ret = DCAL_HOST_GENERAL_FAIL;
-				}
-				else
-					ret = WEXITSTATUS(ret);
-			}
-		}
-	}
-
-	build_handshake_ack(B, ret);
-	if (cmd)
-		free(cmd);
-	return 0;
-}
-
-//return codes:
-//0 - success
-//positive value - benign error
-//negative value - unrecoverable error
-int do_get_time(flatcc_builder_t *B)
-{
-	struct timeval tv;
-
-	if (!gettimeofday(&tv, NULL))
-	{
-		flatcc_builder_reset(B);
-		flatbuffers_buffer_start(B, ns(Time_type_identifier));
-		ns(Time_start(B));
-		ns(Time_tv_sec_add(B, tv.tv_sec));
-		ns(Time_tv_usec_add(B, tv.tv_usec));
-
-		ns(Time_end_as_root(B));
-	} else
-		build_handshake_ack(B, DCAL_HOST_GENERAL_FAIL);
-
-	return 0;
-}
-
-//return codes:
-//0 - success
-//positive value - benign error
-//negative value - unrecoverable error
-int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
-{
-	struct timeval tv;
-	int ret = DCAL_SUCCESS;
-	ns(Time_table_t) tt;
-
-	tt = ns(Command_cmd_pl(cmd));
-
-	tv.tv_sec = ns(Time_tv_sec(tt));
-	tv.tv_usec = ns(Time_tv_usec(tt));
-
-	if (settimeofday(&tv, NULL))
-		ret = DCAL_HOST_GENERAL_FAIL;
-
-	build_handshake_ack(B, ret);
-	return 0;
-}
-
-//return codes:
-//0 - success
-//positive value - benign error
-//negative value - unrecoverable error
 int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
  pthread_mutex_t *sdk_lock, bool *exit_called)
 {
@@ -941,18 +839,6 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			case ns(Commands_SETGLOBALS):
 			DBGDEBUG("Set Globals\n");
 			return do_set_globals(B, cmd, sdk_lock);
-			break;
-			case ns(Commands_SETTIME):
-			DBGDEBUG("Set Time\n");
-			return do_set_time(B, cmd);
-			break;
-			case ns(Commands_GETTIME):
-			DBGDEBUG("Get Time\n");
-			return do_get_time(B);
-			break;
-			case ns(Commands_NTPDATE):
-			DBGDEBUG("NTPDATE\n");
-			return do_issue_ntpdate(B, cmd);
 			break;
 //TODO - add other command processing
 		case ns(Commands_GETPROFILELIST):

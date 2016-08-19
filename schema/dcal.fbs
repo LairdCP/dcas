@@ -117,13 +117,8 @@ table Profile_list {
 	profiles:[P_entry];
 }
 
-table Time {
-	tv_sec: int;
-	tv_usec: int;
-}
-
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, U32, String, Time }
+union Cmd_pl { Globals, Profile, U32, String }
 
 enum Commands:uint {
 	INVALID =0,
@@ -140,9 +135,6 @@ enum Commands:uint {
 	WIFIDISABLE,
 	WIFIRESTART,
 	SYSTEMREBOOT,
-	SETTIME,
-	GETTIME,
-	NTPDATE,
 	}
 
 table Command {
