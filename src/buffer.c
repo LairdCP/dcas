@@ -1420,11 +1420,11 @@ int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *
 
 	sprintf(commandline, "%s%s%s%s%s%s%s",
 	               FWUPDATE,
-	               FWTXT,
 	               (flags & FWU_FORCE)?FWU_FORCE_F:"",
 	               FWU_DISABLE_REBOOT_F,
 	               (flags & FWU_DISABLE_NOTIFY)?FWU_DISABLE_NOTIFY_F:"",
 	               (flags & FWU_DISABLE_TRANSFER)?FWU_DISABLE_TRANSFER_F:"",
+	               FWTXT,
 	               DEBUGFILE);
 
 	ret = do_system_command(B, commandline);
