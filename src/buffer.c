@@ -882,7 +882,6 @@ int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		ns(Globals_pmk_add(B, gcfg.PMKcaching));
 		ns(Globals_probe_delay_add(B, gcfg.probeDelay));
 		ns(Globals_regdomain_add(B, gcfg.regDomain));
-		ns(Globals_roam_period_add(B, gcfg.roamPeriod));
 		ns(Globals_roam_periodms_add(B, gcfg.roamPeriodms));
 		ns(Globals_roam_trigger_add(B, gcfg.roamTrigger));
 		ns(Globals_rts_add(B, gcfg.RTSThreshold));
@@ -938,7 +937,6 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.PMKcaching = ns(Globals_pmk(gt));
 	gcfg.probeDelay = ns(Globals_probe_delay(gt));
 	gcfg.regDomain = ns(Globals_regdomain(gt));
-	gcfg.roamPeriod = ns(Globals_roam_period(gt));
 	gcfg.roamPeriodms = ns(Globals_roam_periodms(gt));
 	gcfg.roamTrigger = ns(Globals_roam_trigger(gt));
 	gcfg.RTSThreshold = ns(Globals_rts(gt));
@@ -955,7 +953,7 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	ret = SetGlobalSettings(&gcfg);
 	if(ret) DBGERROR("SetGlobalsettings() returned %d at line %d\n", ret, __LINE__);
 	else
-		DBGINFO("SetGlobalSettgins() returned success\n");
+		DBGINFO("SetGlobalSettings() returned success\n");
 
 	build_handshake_ack(B, ret);
 	return 0;
@@ -1623,7 +1621,6 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 // and the error in the returned handshake table
 
 int process_buffer(process_buf_struct * buf_struct)
-//int process_buffer(char * buf, size_t buf_size, size_t nbytes, pthread_mutex_t *sdk_lock, bool must_be_handshake, bool *exit_called, ssh_channel chan)
 {
 	flatcc_builder_t builder;
 	flatcc_builder_init(&builder);

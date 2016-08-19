@@ -149,7 +149,7 @@ void * ssh_session_thread( void *param )
 {
 	ssh_message message;
 	process_buf_struct buf_struct = {0};
-	slsh_channel chan=0;
+	ssh_channel chan=0;
 	int nbytes, auth=0;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
 	bool *alive;
