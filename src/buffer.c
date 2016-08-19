@@ -9,11 +9,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include "debug.h"
+#include "version.h"
 #include "sdc_sdk.h"
 #include "buffer.h"
 #undef SSID_SZ //TODO - use a different define so no collision on different values for same named #define
 #include "dcal_api.h"
-#include "version.h"
 
 #include "dcal_builder.h"
 #include "dcal_verifier.h"
@@ -379,8 +379,6 @@ int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enabl
 
 SDCERR LRD_WF_AutoProfileCfgControl(const char *name, unsigned char enable);
 SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
-SDCERR LRD_WF_AutoProfileControl(unsigned char enable);
-SDCERR LRD_WF_AutoProfileStatus(unsigned char *enable);
 
 //return codes:
 //0 - success
@@ -681,111 +679,6 @@ int do_issue_radiorestart(flatcc_builder_t *B, pthread_mutex_t * sdk_lock)
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
-SDCERR setIgnoreNullSsid(unsigned long value);
-SDCERR getIgnoreNullSsid(unsigned long *value);
-int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
-{
-	SDCGlobalConfig gcfg = {0};
-	int ret;
-	unsigned long ignoreNullSSID = 0;
-	unsigned char apStatus = 0;
-
-	ret = GetGlobalSettings(&gcfg);
-	
-	if (ret)
-		build_handshake_ack(B, ret);
-	else
-	{
-		flatcc_builder_reset(B);
-		flatbuffers_buffer_start(B, ns(Globals_type_identifier));
-		ns(Globals_start(B));
-
-		SDKLOCK(sdk_lock);
-		getIgnoreNullSsid(&ignoreNullSSID);
-		LRD_WF_AutoProfileStatus(&apStatus);
-		SDKUNLOCK(sdk_lock);
-
-	//	ns(Profile_security5_create_str(B, "1"));
-		ns(Globals_auth_add(B, gcfg.authServerType));
-		ns(Globals_channel_set_a_add(B, gcfg.aLRS));
-		ns(Globals_channel_set_b_add(B, gcfg.bLRS));
-		ns(Globals_auto_profile_add(B, apStatus));
-		ns(Globals_beacon_miss_add(B, gcfg.BeaconMissTimeout));
-		ns(Globals_bt_coex_add(B, gcfg.BTcoexist));
-		ns(Globals_ccx_add(B, gcfg.CCXfeatures));
-		ns(Globals_cert_path_create_str(B, gcfg.certPath));
-		ns(Globals_date_check_add(B,(gcfg.suppInfo & SUPPINFO_TLS_TIME_CHECK)));
-		ns(Globals_def_adhoc_add(B, gcfg.defAdhocChannel));
-		ns(Globals_fips_add(B, (gcfg.suppInfo & SUPPINFO_FIPS)));
-		ns(Globals_pmk_add(B, gcfg.PMKcaching));
-		ns(Globals_probe_delay_add(B, gcfg.probeDelay));
-		ns(Globals_regdomain_add(B, gcfg.regDomain));
-		ns(Globals_roam_period_add(B, gcfg.roamPeriod));
-		ns(Globals_roam_trigger_add(B, gcfg.roamTrigger));
-		ns(Globals_rts_add(B, gcfg.RTSThreshold));
-		ns(Globals_scan_dfs_add(B, gcfg.scanDFSTime));
-		ns(Globals_ttls_add(B, gcfg.TTLSInnerMethod));
-		ns(Globals_uapsd_add(B, gcfg.uAPSD));
-		ns(Globals_wmm_add(B, gcfg.WMEenabled));
-		ns(Globals_ignore_null_ssid_add(B, ignoreNullSSID));
-		ns(Globals_dfs_channels_add(B, gcfg.DFSchannels));
-
-		ns(Globals_end_as_root(B));
-	}
-	return 0;
-}
-
-//return codes:
-//0 - success
-//positive value - benign error
-//negative value - unrecoverable error
-int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
-{
-	ns(Globals_table_t) gt;
-	SDCGlobalConfig gcfg = {0};
-	int ret;
-
-	//TODO we ought to do some assertion that the cmd_table is a globals
-	gt = ns(Command_cmd_pl(cmd));
-
-	SDKLOCK(sdk_lock);
-	gcfg.authServerType = ns(Globals_auth(gt));
-	gcfg.aLRS = ns(Globals_channel_set_a(gt));
-	gcfg.bLRS = ns(Globals_channel_set_b(gt));
-	ret = LRD_WF_AutoProfileControl((unsigned char)ns(Globals_auto_profile(gt)));
-	gcfg.BeaconMissTimeout = ns(Globals_beacon_miss(gt));
-	gcfg.BTcoexist = ns(Globals_bt_coex(gt));
-	gcfg.CCXfeatures = ns(Globals_ccx(gt));
-	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH);
-	if(ns(Globals_date_check(gt)))
-		gcfg.suppInfo |= SUPPINFO_TLS_TIME_CHECK;
-	gcfg.defAdhocChannel = ns(Globals_def_adhoc(gt));
-	if (ns(Globals_fips(gt)))
-		gcfg.suppInfo |= SUPPINFO_FIPS;
-	gcfg.PMKcaching = ns(Globals_pmk(gt));
-	gcfg.probeDelay = ns(Globals_probe_delay(gt));
-	gcfg.regDomain = ns(Globals_regdomain(gt));
-	gcfg.roamPeriod = ns(Globals_roam_period(gt));
-	gcfg.roamTrigger = ns(Globals_roam_trigger(gt));
-	gcfg.RTSThreshold = ns(Globals_rts(gt));
-	gcfg.scanDFSTime = ns(Globals_scan_dfs(gt));
-	gcfg.TTLSInnerMethod = ns(Globals_ttls(gt));
-	gcfg.uAPSD = ns(Globals_uapsd(gt));
-	gcfg.WMEenabled = ns(Globals_wmm(gt));
-	if(!ret)
-		ret = setIgnoreNullSsid((unsigned long) ns(Globals_ignore_null_ssid(gt)));
-	gcfg.DFSchannels = ns(Globals_dfs_channels(gt));
-
-	SDKUNLOCK(sdk_lock);
-
-	build_handshake_ack(B, ret);
-	return 0;
-}
-
-//return codes:
-//0 - success
-//positive value - benign error
-//negative value - unrecoverable error
 int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
  pthread_mutex_t *sdk_lock, bool *exit_called)
 {
@@ -831,14 +724,6 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_DELPROFILE):
 			DBGDEBUG("Del profile\n");
 			return do_del_profile(B, cmd, sdk_lock);
-			break;
-			case ns(Commands_GETGLOBALS):
-			DBGDEBUG("Get Globals\n");
-			return do_get_globals(B, sdk_lock);
-			break;
-			case ns(Commands_SETGLOBALS):
-			DBGDEBUG("Set Globals\n");
-			return do_set_globals(B, cmd, sdk_lock);
 			break;
 //TODO - add other command processing
 		case ns(Commands_GETPROFILELIST):
