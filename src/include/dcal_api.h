@@ -83,6 +83,8 @@ typedef void * laird_global_handle;
 #define IP4_SZ 4
 #define IP6_STR_SZ 46 //max string:0000:0000:0000:0000:0000:0000:xxx.xxx.xxx.xxx plus NULL
                       //(IPV4 mapped IPV6 address)
+typedef char ipv6_str_type[IP6_STR_SZ];
+
 #define NAME_SZ 48
 #ifndef SSID_SZ
 #define SSID_SZ 32
@@ -139,12 +141,18 @@ int dcal_device_status_get_ccx( laird_session_handle session,
                                        size_t ap_name_buflen,
                                        char * clientname,
                                        size_t clientname_buflen);
-// tcp stack related
-int dcal_device_status_get_tcp( laird_session_handle session,
+// ip stack related
+int dcal_device_status_get_ipv4( laird_session_handle session,
                                        unsigned char *ipv4,
-                                       size_t pv4_buflen,
+                                       size_t buflen);
+
+int dcal_device_status_get_ipv6_count( laird_session_handle session,
+                                       size_t *count);
+
+int dcal_device_status_get_ipv6_string_at_index( laird_session_handle session,
+                                       unsigned int index,
                                        char *ipv6,
-                                       size_t ipv6_buflen);
+                                       size_t buflen);
 
 // things that could change moment to moment
 int dcal_device_status_get_connection( laird_session_handle session,
@@ -313,13 +321,6 @@ typedef enum _regulatory_domain{
 int dcal_wifi_global_get_regdomain( laird_global_handle global,
                                     REG_DOMAIN *regdomain);
 
-// 40 and 45 series radios allow setting roamperiod
-int dcal_wifi_global_set_roam_period( laird_global_handle global,
-                                      unsigned int roam_period);
-int dcal_wifi_global_get_roam_period( laird_global_handle global,
-                                      unsigned int *roam_period);
-
-// 50 series radios allow setting roamperiodms
 int dcal_wifi_global_set_roam_periodms( laird_global_handle global,
                                       unsigned int roam_periodms);
 int dcal_wifi_global_get_roam_periodms( laird_global_handle global,
