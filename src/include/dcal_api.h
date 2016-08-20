@@ -26,7 +26,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
 #define LAIRD_DCAL_MAJOR    1
-#define LAIRD_DCAL_MINOR    2
+#define LAIRD_DCAL_MINOR    3
 #include "version.h"
 
 #ifdef __cplusplus
@@ -263,11 +263,6 @@ int dcal_wifi_global_set_beacon_miss( laird_global_handle global,
                                       unsigned int beacon_miss);
 int dcal_wifi_global_get_beacon_miss( laird_global_handle global,
                                       unsigned int *beacon_miss);
-
-int dcal_wifi_global_set_bt_coex( laird_global_handle global,
-                                  bool bt_coex);
-int dcal_wifi_global_get_bt_coex( laird_global_handle global,
-                                  bool *bt_coex);
 
 int dcal_wifi_global_set_ccx( laird_global_handle global, bool ccx);
 int dcal_wifi_global_get_ccx( laird_global_handle global, bool *ccx);

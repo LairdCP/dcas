@@ -873,7 +873,6 @@ int do_get_globals(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 		ns(Globals_channel_set_b_add(B, gcfg.bLRS));
 		ns(Globals_auto_profile_add(B, apStatus));
 		ns(Globals_beacon_miss_add(B, gcfg.BeaconMissTimeout));
-		ns(Globals_bt_coex_add(B, gcfg.BTcoexist));
 		ns(Globals_ccx_add(B, gcfg.CCXfeatures));
 		ns(Globals_cert_path_create_str(B, gcfg.certPath));
 		ns(Globals_date_check_add(B,(gcfg.suppInfo & SUPPINFO_TLS_TIME_CHECK)));
@@ -922,7 +921,6 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.bLRS = ns(Globals_channel_set_b(gt));
 	ret = LRD_WF_AutoProfileControl((unsigned char)ns(Globals_auto_profile(gt)));
 	gcfg.BeaconMissTimeout = ns(Globals_beacon_miss(gt));
-	gcfg.BTcoexist = ns(Globals_bt_coex(gt));
 	gcfg.CCXfeatures = ns(Globals_ccx(gt));
 	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH);
 	if(ns(Globals_date_check(gt)))
