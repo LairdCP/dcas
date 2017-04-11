@@ -152,7 +152,7 @@ keys:
 	cp -v test/ssh_host_* $(TARGET_DIR)/etc/dcas
 
 init.d:
-	install -D -m 755 support/S99dcas $(TARGET_DIR)/etc/init.d/S99dcas
+	install -D -m 755 support/S99dcas $(TARGET_DIR)/etc/init.d/opt/S99dcas
 
 #
 # Utility
