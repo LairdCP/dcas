@@ -108,7 +108,7 @@ int main(int argc,char *argv[])
 void PrintVersion( void )
 {
 	// Display the copyright message
-	printf("%s version: %s\n", runtime_name, _LRD_VERSION_STRING);
+	printf("%s version: %s-%s\n", runtime_name, LRD_BUILD_NUMBER, _LRD_VERSION_STRING);
 	printf("Device Control API Library version: %s\n", DCAL_VERSION_STR);
 }
 
