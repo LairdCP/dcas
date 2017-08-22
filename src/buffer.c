@@ -1261,10 +1261,10 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			}
 			if (ns(Interface_bridge(interface))){
 				if (ns(Interface_bridge(interface)) == INTERFACE_ENABLE){
-					char bridge_ports[160];
+					char bridge_ports[STR_SZ];
 					sprintf(bridge_ports, "%s %s", (char*)ns(Interface_interface_name(interface)), LRD_ENI_INTERFACE_WIFI);
 					SDKLOCK(sdk_lock);
-					ret = LRD_ENI_SetBridgePorts((char*)ns(Interface_interface_name(interface)),bridge_ports);
+					ret = LRD_ENI_SetBridgePorts(LRD_ENI_INTERFACE_BRIDGE,bridge_ports);
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_SetBridgePorts() returned %d at line %d\n", ret, __LINE__);
