@@ -438,6 +438,31 @@ typedef enum _interface_property {
 
 int dcal_wifi_interface_clear_property( laird_interface_handle interface,
                                   INTERFACE_PROPERTY prop);
+
+int dcal_wifi_interface_set_method6( laird_interface_handle interface,
+                                  char * method6);
+
+int dcal_wifi_interface_set_address6( laird_interface_handle interface,
+                                  char * address6);
+
+int dcal_wifi_interface_set_netmask6( laird_interface_handle interface,
+                                  char * netmask6);
+
+int dcal_wifi_interface_set_gateway6( laird_interface_handle interface,
+                                  char * gateway6);
+
+int dcal_wifi_interface_set_nameserver6( laird_interface_handle interface,
+                                  char * nameserver6);
+
+int dcal_wifi_interface_set_state6( laird_interface_handle interface,
+                                  bool state6);
+
+int dcal_wifi_interface_set_nat6( laird_interface_handle interface,
+                                  bool nat6);
+
+int dcal_wifi_interface_clear_property6( laird_interface_handle interface,
+                                  INTERFACE_PROPERTY prop6);
+
 // Wifi Scan
 int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
 int dcal_wifi_get_scan_list_entry_ssid(laird_session_handle session,
