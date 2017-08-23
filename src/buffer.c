@@ -14,6 +14,7 @@
 
 #include "debug.h"
 #include "sdc_sdk.h"
+#include "lrd_sdk_eni.h"
 #include "buffer.h"
 #include "dcal_api.h"
 #include "version.h"
@@ -100,6 +101,12 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
+		case ns(Interface_type_hash):
+			if(ns(Profile_verify_as_root(buf,size))){
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
+				ret = 0;
+				}
+			break;
 		case ns(Time_type_hash):
 			if(ns(Time_verify_as_root(buf,size))){
 				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
@@ -160,6 +167,9 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 			break;
 		case ns(Profile_list_type_hash):
 			return "Profile list";
+			break;
+		case ns(Interface_type_hash):
+			return "Interface";
 			break;
 		case ns(Time_type_hash):
 			return "Time";
@@ -961,6 +971,106 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 //0 - success
 //positive value - benign error
 //negative value - unrecoverable error
+int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+#define INTERFACE_DISABLE 1
+#define INTERFACE_ENABLE  2
+
+	ns(Interface_table_t) interface;
+	int ret = SDCERR_FAIL;
+
+	//TODO we ought to do some assertion that the cmd_table is a interface
+	interface = ns(Command_cmd_pl(cmd));
+
+	if (flatbuffers_string_len(ns(Interface_interface_name(interface)))){
+		//IPv4
+		if (ns(Interface_ipv4(interface))){
+			SDKLOCK(sdk_lock);
+			ret = LRD_ENI_AddInterface((char*)ns(Interface_interface_name(interface)));
+			SDKUNLOCK(sdk_lock);
+			if(ret){
+				build_handshake_ack(B, ret);
+				return ret;
+			}
+			if (flatbuffers_string_len(ns(Interface_method(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetMethod((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_method(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetMethod() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+		}
+		//IPv6
+		if (ns(Interface_ipv6(interface))){
+			SDKLOCK(sdk_lock);
+			ret = LRD_ENI_AddInterface6((char*)ns(Interface_interface_name(interface)));
+			SDKUNLOCK(sdk_lock);
+			if(ret){
+				build_handshake_ack(B, ret);
+				return ret;
+			}
+		}
+		if (ns(Interface_auto_start(interface))){
+			if (ns(Interface_auto_start(interface)) == INTERFACE_ENABLE){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_AutoStartOn((char*)ns(Interface_interface_name(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_AutoStartOn() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			else{
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_AutoStartOff((char*)ns(Interface_interface_name(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_AutoStartOff() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+		}
+	} else {
+		ret = SDCERR_INVALID_NAME;
+	}
+
+	build_handshake_ack(B, ret);
+	return 0;
+}
+
+//return codes:
+//0 - success
+//positive value - benign error
+//negative value - unrecoverable error
+int do_del_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) interface_name;
+	int ret;
+
+	//TODO we ought to do some assertion that the cmd_table is a string
+	interface_name = ns(Command_cmd_pl(cmd));
+
+	SDKLOCK(sdk_lock);
+	ret = LRD_ENI_RemoveInterface((char*) ns(String_value(interface_name)));
+	SDKUNLOCK(sdk_lock);
+	if(ret) DBGERROR("LRD_ENI_RemoveInterface() returned %d at line %d\n", ret, __LINE__);
+	else {
+		SDKLOCK(sdk_lock);
+		ret = LRD_ENI_RemoveInterface6((char*) ns(String_value(interface_name)));
+		SDKUNLOCK(sdk_lock);
+		if(ret) DBGERROR("LRD_ENI_RemoveInterface6() returned %d at line %d\n", ret, __LINE__);
+	}
+
+	build_handshake_ack(B, ret);
+
+	return 0; // any error is already in ack/Nack
+}
+
 int do_system_command(flatcc_builder_t *B, char *commandline)
 {
 	int ret = DCAL_SUCCESS;
@@ -1562,6 +1672,14 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_SETGLOBALS):
 			DBGDEBUG("Set Globals\n");
 			return do_set_globals(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_SETINTERFACE):
+			DBGDEBUG("Set Interface\n");
+			return do_set_interface(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_DELINTERFACE):
+			DBGDEBUG("Del interface\n");
+			return do_del_interface(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_SETTIME):
 			DBGDEBUG("Set Time\n");

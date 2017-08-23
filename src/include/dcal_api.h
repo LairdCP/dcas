@@ -78,6 +78,7 @@ typedef char * FQDN;
 typedef void * laird_session_handle;
 typedef void * laird_profile_handle;
 typedef void * laird_global_handle;
+typedef void * laird_interface_handle;
 
 #define MAC_SZ 6
 #define IP4_SZ 4
@@ -375,6 +376,30 @@ int dcal_wifi_global_get_dfs_channels( laird_global_handle global,
                                        DFS_CHANNELS *dfs_channels);
 
 void dcal_wifi_global_printf( laird_global_handle global);
+
+// Interface Management
+// the create function will allocate a laird_interface_handle
+// that will require the close_handle function to be called when done with the
+// handle
+int dcal_wifi_interface_create( laird_interface_handle * interface);
+
+int dcal_wifi_interface_close_handle( laird_interface_handle interface);
+
+// push sends the local interface to the remote radio device.
+int dcal_wifi_interface_push( laird_session_handle session,
+                                  laird_interface_handle interface);
+
+int dcal_wifi_interface_delete( laird_session_handle session,
+                                  char * interface_name);
+
+int dcal_wifi_interface_set_interface_name(laird_interface_handle interface,
+                                  char * interface_name );
+
+int dcal_wifi_interface_set_method( laird_interface_handle interface,
+                                  char * method);
+
+int dcal_wifi_interface_set_auto_start( laird_interface_handle interface,
+                                  bool auto_start);
 
 // Wifi Scan
 int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
