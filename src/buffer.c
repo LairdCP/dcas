@@ -989,6 +989,12 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		char bridge_ports[STR_SZ];
 		int ap_mode = -1;
 		int nat = -1;
+		char method6[STR_SZ];
+		char address6[STR_SZ];
+		char netmask6[STR_SZ];
+		char gateway6[STR_SZ];
+		char nameserver6[STR_SZ];
+		int nat6 = -1;
 
 		flatcc_builder_reset(B);
 		flatbuffers_buffer_start(B, ns(Interface_type_identifier));
@@ -998,12 +1004,13 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		ns(Interface_ap_mode_add(B, 0));
 
 		SDKLOCK(sdk_lock);
+		//IPv4
 		ret = LRD_ENI_GetMethod((char*)ns(String_value(interface_name)), method, sizeof(method));
 		SDKUNLOCK(sdk_lock);
 		//invalid config means interface doesnt exist, ipv6 present but ipv4 is not or vice versa.
 		//invalid param means interface property wasnt found
 		if(ret == SDCERR_INVALID_CONFIG){
-			DBGERROR("%s not found\n",ns(String_value(interface_name)));
+			DBGERROR("%s IPv4 not found\n",ns(String_value(interface_name)));
 			build_handshake_ack(B, ret);
 		} else if (ret == SDCERR_INVALID_PARAMETER){
 			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
@@ -1016,31 +1023,31 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_ADDRESS, address, sizeof(address));
 			if (ret != SDCERR_SUCCESS){
 				address[0] = '\0';
-				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_ADDRESS);
+				DBGDEBUG("%s IPv4 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_ADDRESS);
 			}
 
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NETMASK, netmask, sizeof(netmask));
 			if (ret != SDCERR_SUCCESS){
 				netmask[0] = '\0';
-				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NETMASK);
+				DBGDEBUG("%s IPv4 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NETMASK);
 			}
 
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_GATEWAY, gateway, sizeof(gateway));
 			if (ret != SDCERR_SUCCESS){
 				gateway[0] = '\0';
-				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_GATEWAY);
+				DBGDEBUG("%s IPv4 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_GATEWAY);
 			}
 
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_BROADCAST, broadcast, sizeof(broadcast));
 			if (ret != SDCERR_SUCCESS){
 				broadcast[0] = '\0';
-				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_BROADCAST);
+				DBGDEBUG("%s IPv4 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_BROADCAST);
 			}
 
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NAMESERVER, nameserver, sizeof(nameserver));
 			if (ret != SDCERR_SUCCESS){
 				nameserver[0] = '\0';
-				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NAMESERVER);
+				DBGDEBUG("%s IPv4 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NAMESERVER);
 			}
 
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)LRD_ENI_INTERFACE_BRIDGE, (char*) LRD_ENI_PROPERTY_BRIDGEPORTS, bridge_ports, sizeof(bridge_ports));
@@ -1069,9 +1076,54 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			SDKUNLOCK(sdk_lock);
 			if (ret == SDCERR_SUCCESS){
 				if (!nat)
-					DBGDEBUG("%s NAT is not set\n",ns(String_value(interface_name)));
+					DBGDEBUG("%s IPv4 NAT is not set\n",ns(String_value(interface_name)));
 			} else {
-				DBGERROR("%s failed to retrieve NAT information\n",ns(String_value(interface_name)));
+				DBGERROR("%s failed to retrieve IPv4 NAT information\n",ns(String_value(interface_name)));
+				build_handshake_ack(B, ret);
+			}
+		}
+		//IPv6
+		ret = LRD_ENI_GetMethod6((char*)ns(String_value(interface_name)), method6, sizeof(method6));
+		if(ret == SDCERR_INVALID_CONFIG){
+			DBGERROR("%s IPv6 not found\n",ns(String_value(interface_name)));
+			build_handshake_ack(B, ret);
+		} else if (ret == SDCERR_INVALID_PARAMETER){
+			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
+			build_handshake_ack(B, ret);
+		} else if (ret == SDCERR_SUCCESS){
+			ns(Interface_ipv6_add(B, 1));
+
+			LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
+			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_ADDRESS, address6, sizeof(address6));
+			if (ret != SDCERR_SUCCESS){
+				address6[0] = '\0';
+				DBGDEBUG("%s IPv6 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_ADDRESS);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NETMASK, netmask6, sizeof(netmask6));
+			if (ret != SDCERR_SUCCESS){
+				netmask6[0] = '\0';
+				DBGDEBUG("%s IPv6 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NETMASK);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_GATEWAY, gateway6, sizeof(gateway6));
+			if (ret != SDCERR_SUCCESS){
+				gateway6[0] = '\0';
+				DBGDEBUG("%s IPv6 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_GATEWAY);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NAMESERVER, nameserver6, sizeof(nameserver6));
+			if (ret != SDCERR_SUCCESS){
+				nameserver6[0] = '\0';
+				DBGDEBUG("%s IPv6 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NAMESERVER);
+			}
+
+			ret = LRD_ENI_GetNat6((char*)ns(String_value(interface_name)), &nat6);
+			if (ret == SDCERR_SUCCESS){
+				if (!nat)
+					DBGDEBUG("%s IPv6 NAT is not set\n",ns(String_value(interface_name)));
+			} else {
+				DBGERROR("%s failed to retrieve IPv6 NAT information\n",ns(String_value(interface_name)));
 				build_handshake_ack(B, ret);
 			}
 		}
@@ -1085,6 +1137,12 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		ns(Interface_nameserver_create_str(B, nameserver));
 		ns(Interface_ap_mode_add(B, ap_mode));
 		ns(Interface_nat_add(B, nat));
+		ns(Interface_method6_create_str(B, method6));
+		ns(Interface_address6_create_str(B, address6));
+		ns(Interface_netmask6_create_str(B, netmask6));
+		ns(Interface_gateway6_create_str(B, gateway6));
+		ns(Interface_nameserver6_create_str(B, nameserver6));
+		ns(Interface_nat6_add(B, nat6));
 
 		ns(Interface_end_as_root(B));
 	}
