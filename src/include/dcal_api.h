@@ -382,6 +382,9 @@ void dcal_wifi_global_printf( laird_global_handle global);
 // that will require the close_handle function to be called when done with the
 // handle
 int dcal_wifi_interface_create( laird_interface_handle * interface);
+int dcal_wifi_interface_pull( laird_session_handle session,
+                                 laird_interface_handle * interface,
+                                 char * interfaceName);
 
 int dcal_wifi_interface_close_handle( laird_interface_handle interface);
 
@@ -395,26 +398,50 @@ int dcal_wifi_interface_delete( laird_session_handle session,
 int dcal_wifi_interface_set_interface_name(laird_interface_handle interface,
                                   char * interface_name );
 
+int dcal_wifi_interface_get_ipv4_state( laird_interface_handle interface,
+                                  bool * state);
+
 int dcal_wifi_interface_set_method( laird_interface_handle interface,
                                   char * method);
+
+int dcal_wifi_interface_get_method( laird_interface_handle interface,
+                                  char * method, size_t buf_len);
 
 int dcal_wifi_interface_set_auto_start( laird_interface_handle interface,
                                   bool auto_start);
 
+int dcal_wifi_interface_get_auto_start( laird_interface_handle interface,
+                                  bool * auto_start);
+
 int dcal_wifi_interface_set_address( laird_interface_handle interface,
                                   char * address);
+
+int dcal_wifi_interface_get_address( laird_interface_handle interface,
+                                  char * address, size_t buf_len);
 
 int dcal_wifi_interface_set_netmask( laird_interface_handle interface,
                                   char * netmask);
 
+int dcal_wifi_interface_get_netmask( laird_interface_handle interface,
+                                  char * netmask, size_t buf_len);
+
 int dcal_wifi_interface_set_gateway( laird_interface_handle interface,
                                   char * gateway);
+
+int dcal_wifi_interface_get_gateway( laird_interface_handle interface,
+                                  char * gateway, size_t buf_len);
 
 int dcal_wifi_interface_set_broadcast_address( laird_interface_handle interface,
                                   char * broadcast);
 
+int dcal_wifi_interface_get_broadcast_address( laird_interface_handle interface,
+                                  char * broadcast, size_t buf_len);
+
 int dcal_wifi_interface_set_nameserver( laird_interface_handle interface,
                                   char * nameserver);
+
+int dcal_wifi_interface_get_nameserver( laird_interface_handle interface,
+                                  char * nameserver, size_t buf_len);
 
 int dcal_wifi_interface_set_state( laird_interface_handle interface,
                                   bool state);
@@ -422,11 +449,20 @@ int dcal_wifi_interface_set_state( laird_interface_handle interface,
 int dcal_wifi_interface_set_bridge( laird_interface_handle interface,
                                   bool bridge);
 
+int dcal_wifi_interface_get_bridge( laird_interface_handle interface,
+                                  bool * bridge);
+
 int dcal_wifi_interface_set_ap_mode( laird_interface_handle interface,
                                   bool ap_mode);
 
+int dcal_wifi_interface_get_ap_mode( laird_interface_handle interface,
+                                  bool * ap_mode);
+
 int dcal_wifi_interface_set_nat( laird_interface_handle interface,
                                   bool nat);
+
+int dcal_wifi_interface_get_nat( laird_interface_handle interface,
+                                  bool * nat);
 
 typedef enum _interface_property {
 	ADDRESS		= 1 << 0,

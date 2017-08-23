@@ -102,7 +102,7 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				}
 			break;
 		case ns(Interface_type_hash):
-			if(ns(Profile_verify_as_root(buf,size))){
+			if(ns(Interface_verify_as_root(buf,size))){
 				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
 				ret = 0;
 				}
@@ -967,6 +967,130 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	return 0;
 }
 
+int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	ns(String_table_t) interface_name;
+	int ret = SDCERR_SUCCESS;
+
+	//TODO we ought to do some assertion that the cmd_table is a string
+	interface_name = ns(Command_cmd_pl(cmd));
+
+	if (ret)
+		build_handshake_ack(B, ret);
+	else
+	{
+		int auto_start = -1;
+		char method[STR_SZ];
+		char address[STR_SZ];
+		char netmask[STR_SZ];
+		char gateway[STR_SZ];
+		char broadcast[STR_SZ];
+		char nameserver[STR_SZ];
+		char bridge_ports[STR_SZ];
+		int ap_mode = -1;
+		int nat = -1;
+
+		flatcc_builder_reset(B);
+		flatbuffers_buffer_start(B, ns(Interface_type_identifier));
+		ns(Profile_start(B));
+
+		ns(Interface_bridge_add(B, 0));
+		ns(Interface_ap_mode_add(B, 0));
+
+		SDKLOCK(sdk_lock);
+		ret = LRD_ENI_GetMethod((char*)ns(String_value(interface_name)), method, sizeof(method));
+		SDKUNLOCK(sdk_lock);
+		//invalid config means interface doesnt exist, ipv6 present but ipv4 is not or vice versa.
+		//invalid param means interface property wasnt found
+		if(ret == SDCERR_INVALID_CONFIG){
+			DBGERROR("%s not found\n",ns(String_value(interface_name)));
+			build_handshake_ack(B, ret);
+		} else if (ret == SDCERR_INVALID_PARAMETER){
+			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
+			build_handshake_ack(B, ret);
+		} else if (ret == SDCERR_SUCCESS){
+			ns(Interface_ipv4_add(B, 1));
+
+			SDKLOCK(sdk_lock);
+			LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_ADDRESS, address, sizeof(address));
+			if (ret != SDCERR_SUCCESS){
+				address[0] = '\0';
+				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_ADDRESS);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NETMASK, netmask, sizeof(netmask));
+			if (ret != SDCERR_SUCCESS){
+				netmask[0] = '\0';
+				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NETMASK);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_GATEWAY, gateway, sizeof(gateway));
+			if (ret != SDCERR_SUCCESS){
+				gateway[0] = '\0';
+				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_GATEWAY);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_BROADCAST, broadcast, sizeof(broadcast));
+			if (ret != SDCERR_SUCCESS){
+				broadcast[0] = '\0';
+				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_BROADCAST);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_NAMESERVER, nameserver, sizeof(nameserver));
+			if (ret != SDCERR_SUCCESS){
+				nameserver[0] = '\0';
+				DBGDEBUG("%s property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_NAMESERVER);
+			}
+
+			ret = LRD_ENI_GetInterfacePropertyValue((char*)LRD_ENI_INTERFACE_BRIDGE, (char*) LRD_ENI_PROPERTY_BRIDGEPORTS, bridge_ports, sizeof(bridge_ports));
+			if (ret != SDCERR_SUCCESS){
+				bridge_ports[0] = '\0';
+				DBGDEBUG("%s is not configured for bridging\n",ns(String_value(interface_name)));
+			} else {
+				if (strstr(bridge_ports,(char*)ns(String_value(interface_name))) != NULL){
+					ret = LRD_ENI_GetMethod((char*)LRD_ENI_INTERFACE_BRIDGE, method, sizeof(method));
+					if (ret == SDCERR_SUCCESS){
+						ns(Interface_bridge_add(B, 1));
+					}
+				}
+			}
+
+			ret = LRD_ENI_GetHostAPD((char*)ns(String_value(interface_name)), &ap_mode);
+			if (ret == SDCERR_SUCCESS){
+				if (!ap_mode)
+					DBGDEBUG("%s AP mode not set\n",ns(String_value(interface_name)));
+			} else {
+				DBGERROR("%s failed to retrieve AP mode information\n",ns(String_value(interface_name)));
+				build_handshake_ack(B, ret);
+			}
+
+			ret = LRD_ENI_GetNat((char*)ns(String_value(interface_name)), &nat);
+			SDKUNLOCK(sdk_lock);
+			if (ret == SDCERR_SUCCESS){
+				if (!nat)
+					DBGDEBUG("%s NAT is not set\n",ns(String_value(interface_name)));
+			} else {
+				DBGERROR("%s failed to retrieve NAT information\n",ns(String_value(interface_name)));
+				build_handshake_ack(B, ret);
+			}
+		}
+
+		ns(Interface_auto_start_add(B, auto_start));
+		ns(Interface_method_create_str(B, method));
+		ns(Interface_address_create_str(B, address));
+		ns(Interface_netmask_create_str(B, netmask));
+		ns(Interface_gateway_create_str(B, gateway));
+		ns(Interface_broadcast_create_str(B, broadcast));
+		ns(Interface_nameserver_create_str(B, nameserver));
+		ns(Interface_ap_mode_add(B, ap_mode));
+		ns(Interface_nat_add(B, nat));
+
+		ns(Interface_end_as_root(B));
+	}
+	return 0;
+}
+
 //return codes:
 //0 - success
 //positive value - benign error
@@ -1382,6 +1506,7 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			}
 		}
 	} else {
+		DBGERROR("Invalid name %s\n", (char*)ns(Interface_interface_name(interface)));
 		ret = SDCERR_INVALID_NAME;
 	}
 
@@ -2018,6 +2143,10 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_SETGLOBALS):
 			DBGDEBUG("Set Globals\n");
 			return do_set_globals(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_GETINTERFACE):
+			DBGDEBUG("Get Interface\n");
+			return do_get_interface(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_SETINTERFACE):
 			DBGDEBUG("Set Interface\n");
