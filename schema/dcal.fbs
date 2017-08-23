@@ -122,6 +122,7 @@ table Interface {
 	bridge:uint;
 	ap_mode:uint;
 	nat:uint;
+	prop6:uint;
 	ipv6:bool;
 	method6:string;
 	address6:string;
