@@ -475,26 +475,47 @@ typedef enum _interface_property {
 int dcal_wifi_interface_clear_property( laird_interface_handle interface,
                                   INTERFACE_PROPERTY prop);
 
+int dcal_wifi_interface_get_ipv6_state( laird_interface_handle interface,
+                                  bool * state6);
+
 int dcal_wifi_interface_set_method6( laird_interface_handle interface,
                                   char * method6);
+
+int dcal_wifi_interface_get_method6( laird_interface_handle interface,
+                                  char * method6, size_t buf_len);
 
 int dcal_wifi_interface_set_address6( laird_interface_handle interface,
                                   char * address6);
 
+int dcal_wifi_interface_get_address6( laird_interface_handle interface,
+                                  char * address6, size_t buf_len);
+
 int dcal_wifi_interface_set_netmask6( laird_interface_handle interface,
                                   char * netmask6);
+
+int dcal_wifi_interface_get_netmask6( laird_interface_handle interface,
+                                  char * netmask6, size_t buf_len);
 
 int dcal_wifi_interface_set_gateway6( laird_interface_handle interface,
                                   char * gateway6);
 
+int dcal_wifi_interface_get_gateway6( laird_interface_handle interface,
+                                  char * gateway6, size_t buf_len);
+
 int dcal_wifi_interface_set_nameserver6( laird_interface_handle interface,
                                   char * nameserver6);
+
+int dcal_wifi_interface_get_nameserver6( laird_interface_handle interface,
+                                  char * nameserver6, size_t buf_len);
 
 int dcal_wifi_interface_set_state6( laird_interface_handle interface,
                                   bool state6);
 
 int dcal_wifi_interface_set_nat6( laird_interface_handle interface,
                                   bool nat6);
+
+int dcal_wifi_interface_get_nat6( laird_interface_handle interface,
+                                  bool * nat6);
 
 int dcal_wifi_interface_clear_property6( laird_interface_handle interface,
                                   INTERFACE_PROPERTY prop6);
