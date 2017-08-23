@@ -106,6 +106,31 @@ table Profile {
 	autoprofile: bool = false;
 }
 
+table Interface {
+	interface_name:string;
+	ipv4:bool;
+	method:string;
+	auto_start:uint;
+	address:string;
+	netmask:string;
+	netmask6:string;
+	gateway:string;
+	nameserver:string;
+	broadcast:string;
+	state:uint;
+	bridge_one:string;
+	bridge_two:string;
+	ap_mode:uint;
+	nat:uint;
+	ipv6:bool;
+	method6:string;
+	address6:string;
+	gateway6:string;
+	nameserver6:string;
+	state6:uint;
+	nat6:uint;
+}
+
 table P_entry {
 	name:string;
 	active:bool = false;
@@ -141,7 +166,7 @@ table Filexfer {
 }
 
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, U32, String, Time, Filexfer }
+union Cmd_pl { Globals, Profile, Interface, U32, String, Time, Filexfer }
 
 enum Commands:uint {
 	INVALID =0,
@@ -155,6 +180,8 @@ enum Commands:uint {
 	GETPROFILELIST,
 	GETSCANLIST,
 	ACTIVATEPROFILE,
+	SETINTERFACE,
+	DELINTERFACE,
 	WIFIENABLE,
 	WIFIDISABLE,
 	WIFIRESTART,
