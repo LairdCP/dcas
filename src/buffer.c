@@ -990,6 +990,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		int ap_mode = -1;
 		int nat = -1;
 		char method6[STR_SZ];
+		char dhcp6[STR_SZ];
 		char address6[STR_SZ];
 		char netmask6[STR_SZ];
 		char gateway6[STR_SZ];
@@ -1094,6 +1095,12 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			ns(Interface_ipv6_add(B, 1));
 
 			LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
+			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_DHCP, dhcp6, sizeof(dhcp6));
+			if (ret != SDCERR_SUCCESS){
+				dhcp6[0] = '\0';
+				DBGDEBUG("%s IPv6 property %s not found\n",ns(String_value(interface_name)),LRD_ENI_PROPERTY_DHCP);
+			}
+
 			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_ADDRESS, address6, sizeof(address6));
 			if (ret != SDCERR_SUCCESS){
 				address6[0] = '\0';
@@ -1138,6 +1145,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		ns(Interface_ap_mode_add(B, ap_mode));
 		ns(Interface_nat_add(B, nat));
 		ns(Interface_method6_create_str(B, method6));
+		ns(Interface_dhcp6_create_str(B, dhcp6));
 		ns(Interface_address6_create_str(B, address6));
 		ns(Interface_netmask6_create_str(B, netmask6));
 		ns(Interface_gateway6_create_str(B, gateway6));
@@ -1348,6 +1356,16 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					return ret;
 				}
 			}
+			if (flatbuffers_string_len(ns(Interface_dhcp6(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetDhcp6((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_dhcp6(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetDhcp6() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
 			if (flatbuffers_string_len(ns(Interface_address6(interface)))){
 				SDKLOCK(sdk_lock);
 				ret = LRD_ENI_SetAddress6((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_address6(interface)));
@@ -1551,6 +1569,16 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				case NAMESERVER:
 					SDKLOCK(sdk_lock);
 					ret = LRD_ENI_ClearProperty6((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_NAMESERVER);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				case DHCP:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty6((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_DHCP);
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
