@@ -470,6 +470,7 @@ typedef enum _interface_property {
 	GATEWAY		= 1 << 2,
 	BROADCAST	= 1 << 3,
 	NAMESERVER	= 1 << 4,
+	DHCP		= 1 << 5,
 } INTERFACE_PROPERTY;
 
 int dcal_wifi_interface_clear_property( laird_interface_handle interface,
@@ -477,6 +478,12 @@ int dcal_wifi_interface_clear_property( laird_interface_handle interface,
 
 int dcal_wifi_interface_get_ipv6_state( laird_interface_handle interface,
                                   bool * state6);
+
+int dcal_wifi_interface_set_dhcp6( laird_interface_handle interface,
+                                  char * dhcp6);
+
+int dcal_wifi_interface_get_dhcp6( laird_interface_handle interface,
+                                  char * dhcp6, size_t buf_len);
 
 int dcal_wifi_interface_set_method6( laird_interface_handle interface,
                                   char * method6);
