@@ -125,6 +125,7 @@ table Interface {
 	prop6:uint;
 	ipv6:bool;
 	method6:string;
+	dhcp6:string;
 	address6:string;
 	gateway6:string;
 	nameserver6:string;
