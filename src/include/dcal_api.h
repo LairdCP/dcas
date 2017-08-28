@@ -401,6 +401,43 @@ int dcal_wifi_interface_set_method( laird_interface_handle interface,
 int dcal_wifi_interface_set_auto_start( laird_interface_handle interface,
                                   bool auto_start);
 
+int dcal_wifi_interface_set_address( laird_interface_handle interface,
+                                  char * address);
+
+int dcal_wifi_interface_set_netmask( laird_interface_handle interface,
+                                  char * netmask);
+
+int dcal_wifi_interface_set_gateway( laird_interface_handle interface,
+                                  char * gateway);
+
+int dcal_wifi_interface_set_broadcast_address( laird_interface_handle interface,
+                                  char * broadcast);
+
+int dcal_wifi_interface_set_nameserver( laird_interface_handle interface,
+                                  char * nameserver);
+
+int dcal_wifi_interface_set_state( laird_interface_handle interface,
+                                  bool state);
+
+int dcal_wifi_interface_set_bridge( laird_interface_handle interface,
+                                  bool bridge);
+
+int dcal_wifi_interface_set_ap_mode( laird_interface_handle interface,
+                                  bool ap_mode);
+
+int dcal_wifi_interface_set_nat( laird_interface_handle interface,
+                                  bool nat);
+
+typedef enum _interface_property {
+	ADDRESS		= 1 << 0,
+	NETMASK		= 1 << 1,
+	GATEWAY		= 1 << 2,
+	BROADCAST	= 1 << 3,
+	NAMESERVER	= 1 << 4,
+} INTERFACE_PROPERTY;
+
+int dcal_wifi_interface_clear_property( laird_interface_handle interface,
+                                  INTERFACE_PROPERTY prop);
 // Wifi Scan
 int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
 int dcal_wifi_get_scan_list_entry_ssid(laird_session_handle session,
