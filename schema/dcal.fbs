@@ -108,6 +108,7 @@ table Profile {
 
 table Interface {
 	interface_name:string;
+	prop:uint;
 	ipv4:bool;
 	method:string;
 	auto_start:uint;
@@ -115,11 +116,10 @@ table Interface {
 	netmask:string;
 	netmask6:string;
 	gateway:string;
-	nameserver:string;
 	broadcast:string;
+	nameserver:string;
 	state:uint;
-	bridge_one:string;
-	bridge_two:string;
+	bridge:uint;
 	ap_mode:uint;
 	nat:uint;
 	ipv6:bool;
