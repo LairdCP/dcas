@@ -975,6 +975,9 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 {
 #define INTERFACE_DISABLE 1
 #define INTERFACE_ENABLE  2
+#define CLEAR_PROP_BITMASK_SWITCH(x) \
+                          for (uint64_t bit = 1; (x) >= bit; bit *= 2) if ((x) & bit) switch (bit)
+
 
 	ns(Interface_table_t) interface;
 	int ret = SDCERR_FAIL;
@@ -1002,6 +1005,146 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					return ret;
 				}
 			}
+			if (flatbuffers_string_len(ns(Interface_address(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetAddress((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_address(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetAddress() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			if (flatbuffers_string_len(ns(Interface_netmask(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetNetmask((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_netmask(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetNetmask() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			if (flatbuffers_string_len(ns(Interface_gateway(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetGateway((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_gateway(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetGateway() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			if (flatbuffers_string_len(ns(Interface_nameserver(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetNameserver((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_nameserver(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetNameserver() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			if (flatbuffers_string_len(ns(Interface_broadcast(interface)))){
+				SDKLOCK(sdk_lock);
+				ret = LRD_ENI_SetBroadcastAddress((char*)ns(Interface_interface_name(interface)),(char*)ns(Interface_broadcast(interface)));
+				SDKUNLOCK(sdk_lock);
+				if(ret){
+					DBGERROR("LRD_ENI_SetBroadcastAddress() returned %d at line %d\n", ret, __LINE__);
+					build_handshake_ack(B, ret);
+					return ret;
+				}
+			}
+			if (ns(Interface_state(interface))){
+				if (ns(Interface_state(interface)) == INTERFACE_ENABLE){
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_EnableInterface((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_EnableInterface() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+				else{
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_DisableInterface((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_DisableInterface() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+			}
+			if (ns(Interface_bridge(interface))){
+				if (ns(Interface_bridge(interface)) == INTERFACE_ENABLE){
+					char bridge_ports[160];
+					sprintf(bridge_ports, "%s %s", (char*)ns(Interface_interface_name(interface)), LRD_ENI_INTERFACE_WIFI);
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_SetBridgePorts((char*)ns(Interface_interface_name(interface)),bridge_ports);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_SetBridgePorts() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+				else{
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_BRIDGEPORTS);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+			}
+			if (ns(Interface_ap_mode(interface))){
+				if (ns(Interface_ap_mode(interface)) == INTERFACE_ENABLE){
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_EnableHostAPD((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_EnableHostAPD() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+				else{
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_DisableHostAPD((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_DisableHostAPD() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+			}
+			if (ns(Interface_nat(interface))){
+				if (ns(Interface_nat(interface)) == INTERFACE_ENABLE){
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_EnableNat((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_EnableNat() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+				else{
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_DisableNat((char*)ns(Interface_interface_name(interface)));
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_DisableNat() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+				}
+			}
 		}
 		//IPv6
 		if (ns(Interface_ipv6(interface))){
@@ -1009,6 +1152,7 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			ret = LRD_ENI_AddInterface6((char*)ns(Interface_interface_name(interface)));
 			SDKUNLOCK(sdk_lock);
 			if(ret){
+				DBGERROR("LRD_ENI_AddInterface6() returned %d at line %d\n", ret, __LINE__);
 				build_handshake_ack(B, ret);
 				return ret;
 			}
@@ -1033,6 +1177,65 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					build_handshake_ack(B, ret);
 					return ret;
 				}
+			}
+		}
+		//Clear IPv4 properties
+		if (ns(Interface_prop(interface))){
+			CLEAR_PROP_BITMASK_SWITCH(ns(Interface_prop(interface)))
+			{
+				case ADDRESS:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_ADDRESS);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				case NETMASK:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_NETMASK);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				case GATEWAY:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_GATEWAY);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				case BROADCAST:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_BROADCAST);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				case NAMESERVER:
+					SDKLOCK(sdk_lock);
+					ret = LRD_ENI_ClearProperty((char*)ns(Interface_interface_name(interface)),LRD_ENI_PROPERTY_NAMESERVER);
+					SDKUNLOCK(sdk_lock);
+					if(ret){
+						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
+						build_handshake_ack(B, ret);
+						return ret;
+					}
+					break;
+				default:
+					DBGERROR("Unknown option passed to LRD_ENI_ClearProperty() at line %d\n", __LINE__);
+					break;
 			}
 		}
 	} else {
