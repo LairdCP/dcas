@@ -107,6 +107,12 @@ flatbuffers_thash_t verify_buffer(const void * buf, const size_t size)
 				ret = 0;
 				}
 			break;
+		case ns(Lease_type_hash):
+			if(ns(Lease_verify_as_root(buf,size))){
+				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
+				ret = 0;
+				}
+			break;
 		case ns(Time_type_hash):
 			if(ns(Time_verify_as_root(buf,size))){
 				DBGERROR("line %d: unable to verify buffer\n", __LINE__);
@@ -170,6 +176,9 @@ const char * buftype_to_string(flatbuffers_thash_t buftype)
 			break;
 		case ns(Interface_type_hash):
 			return "Interface";
+			break;
+		case ns(Lease_type_hash):
+			return "Lease";
 			break;
 		case ns(Time_type_hash):
 			return "Time";
@@ -1628,6 +1637,47 @@ int do_del_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 	return 0; // any error is already in ack/Nack
 }
 
+int do_get_lease(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *sdk_lock)
+{
+	int ret = SDCERR_FAIL;
+	ns(String_table_t) interface_name;
+	DHCP_LEASE DHCPLease;
+
+	//TODO we ought to do some assertion that the cmd_table is a string
+	interface_name = ns(Command_cmd_pl(cmd));
+
+	flatcc_builder_reset(B);
+	flatbuffers_buffer_start(B, ns(Lease_type_identifier));
+	ns(Lease_start(B));
+
+	SDKLOCK(sdk_lock);
+	ret = LRD_WF_GetDHCPIPv4Lease(&DHCPLease, (char*) ns(String_value(interface_name)));
+	SDKUNLOCK(sdk_lock);
+
+	if(ret){
+		DBGERROR("LRD_WF_GetDHCPIPv4Lease() returned %d at line %d\n", ret, __LINE__);
+		build_handshake_ack(B, ret);
+		return ret;
+	}
+
+	ns(Lease_interface_create_str(B, DHCPLease.interface));
+	ns(Lease_address_create_str(B, DHCPLease.address));
+	ns(Lease_subnet_mask_create_str(B, DHCPLease.subnet_mask));
+	ns(Lease_routers_create_str(B, DHCPLease.routers));
+	ns(Lease_lease_time_add(B, DHCPLease.lease_time));
+	ns(Lease_message_type_add(B, DHCPLease.message_type));
+	ns(Lease_dns_servers_create_str(B, DHCPLease.dns_servers));
+	ns(Lease_dhcp_server_create_str(B, DHCPLease.dhcp_server));
+	ns(Lease_domain_name_create_str(B, DHCPLease.domain_name));
+	ns(Lease_renew_create_str(B, DHCPLease.renew));
+	ns(Lease_rebind_create_str(B, DHCPLease.rebind));
+	ns(Lease_expire_create_str(B, DHCPLease.expire));
+
+	ns(Lease_end_as_root(B));
+
+	return 0;
+}
+
 int do_system_command(flatcc_builder_t *B, char *commandline)
 {
 	int ret = DCAL_SUCCESS;
@@ -2241,6 +2291,10 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 		case ns(Commands_DELINTERFACE):
 			DBGDEBUG("Del interface\n");
 			return do_del_interface(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_GETLEASE):
+			DBGDEBUG("Get Lease\n");
+			return do_get_lease(B, cmd, sdk_lock);
 			break;
 		case ns(Commands_SETTIME):
 			DBGDEBUG("Set Time\n");

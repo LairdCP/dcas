@@ -133,6 +133,21 @@ table Interface {
 	nat6:uint;
 }
 
+table Lease {
+	interface:string;
+	address:string;
+	subnet_mask:string;
+	routers:string;
+	lease_time:long;
+	message_type:uint;
+	dns_servers:string;
+	dhcp_server:string;
+	domain_name:string;
+	renew:string;
+	rebind:string;
+	expire:string;
+}
+
 table P_entry {
 	name:string;
 	active:bool = false;
@@ -168,7 +183,7 @@ table Filexfer {
 }
 
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, Interface, U32, String, Time, Filexfer }
+union Cmd_pl { Globals, Profile, Interface, Lease, U32, String, Time, Filexfer }
 
 enum Commands:uint {
 	INVALID =0,
@@ -185,6 +200,7 @@ enum Commands:uint {
 	GETINTERFACE,
 	SETINTERFACE,
 	DELINTERFACE,
+	GETLEASE,
 	WIFIENABLE,
 	WIFIDISABLE,
 	WIFIRESTART,
