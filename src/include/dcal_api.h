@@ -79,6 +79,7 @@ typedef void * laird_session_handle;
 typedef void * laird_profile_handle;
 typedef void * laird_global_handle;
 typedef void * laird_interface_handle;
+typedef void * laird_lease_handle;
 
 #define MAC_SZ 6
 #define IP4_SZ 4
@@ -526,6 +527,53 @@ int dcal_wifi_interface_get_nat6( laird_interface_handle interface,
 
 int dcal_wifi_interface_clear_property6( laird_interface_handle interface,
                                   INTERFACE_PROPERTY prop6);
+
+// Interface Lease Management
+// the create function will allocate a laird_lease_handle
+// that will require the close_handle function to be called when done with the
+// handle
+int dcal_wifi_lease_create( laird_lease_handle * lease);
+int dcal_wifi_lease_pull( laird_session_handle session,
+                                  laird_lease_handle * lease,
+                                  char * interfaceName);
+
+int dcal_wifi_lease_close_handle( laird_lease_handle interface);
+
+int dcal_wifi_lease_get_interface( laird_lease_handle lease,
+                                  char *interface, size_t buf_len);
+
+int dcal_wifi_lease_get_address( laird_lease_handle lease,
+                                  char *address, size_t buf_len);
+
+int dcal_wifi_lease_get_subnet_mask( laird_lease_handle lease,
+                                  char *subnet_mask, size_t buf_len);
+
+int dcal_wifi_lease_get_routers( laird_lease_handle lease,
+                                  char *routers, size_t buf_len);
+
+int dcal_wifi_lease_get_lease_time( laird_lease_handle lease,
+                                  long *lease_time);
+
+int dcal_wifi_lease_get_message_type( laird_lease_handle lease,
+                                  int *message_type);
+
+int dcal_wifi_lease_get_dns_servers( laird_lease_handle lease,
+                                  char *dns_servers, size_t buf_len);
+
+int dcal_wifi_lease_get_dhcp_server( laird_lease_handle lease,
+                                  char *dhcp_server, size_t buf_len);
+
+int dcal_wifi_lease_get_domain_name( laird_lease_handle lease,
+                                  char *domain_name, size_t buf_len);
+
+int dcal_wifi_lease_get_renew( laird_lease_handle lease,
+                                  char *renew, size_t buf_len);
+
+int dcal_wifi_lease_get_rebind( laird_lease_handle lease,
+                                  char *rebind, size_t buf_len);
+
+int dcal_wifi_lease_get_expire( laird_lease_handle lease,
+                                  char *expire, size_t buf_len);
 
 // Wifi Scan
 int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
