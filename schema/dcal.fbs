@@ -148,6 +148,18 @@ table Lease {
 	expire:string;
 }
 
+table Default_route {
+	interface:string;
+	destination:string;
+	gateway:string;
+	flags:uint;
+	metric:uint;
+	subnet_mask:string;
+	mtu:uint;
+	window:uint;
+	irtt:uint;
+}
+
 table P_entry {
 	name:string;
 	active:bool = false;
@@ -183,7 +195,7 @@ table Filexfer {
 }
 
 // commands payloads to dcas - can be unused for some commands
-union Cmd_pl { Globals, Profile, Interface, Lease, U32, String, Time, Filexfer }
+union Cmd_pl { Globals, Profile, Interface, Lease, Default_route, U32, String, Time, Filexfer }
 
 enum Commands:uint {
 	INVALID =0,
@@ -201,6 +213,7 @@ enum Commands:uint {
 	SETINTERFACE,
 	DELINTERFACE,
 	GETLEASE,
+	GETDEFAULTROUTE,
 	WIFIENABLE,
 	WIFIDISABLE,
 	WIFIRESTART,

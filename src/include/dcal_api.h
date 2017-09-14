@@ -80,6 +80,7 @@ typedef void * laird_profile_handle;
 typedef void * laird_global_handle;
 typedef void * laird_interface_handle;
 typedef void * laird_lease_handle;
+typedef void * laird_default_route_handle;
 
 #define MAC_SZ 6
 #define IP4_SZ 4
@@ -574,6 +575,47 @@ int dcal_wifi_lease_get_rebind( laird_lease_handle lease,
 
 int dcal_wifi_lease_get_expire( laird_lease_handle lease,
                                   char *expire, size_t buf_len);
+
+// Interface Default route Management
+// the create function will allocate a laird_default_route_handle
+// that will require the close_handle function to be called when done with the
+// handle
+int dcal_wifi_default_route_create( laird_default_route_handle * default_route);
+// If interface_name pointer is NULL, the first default route will be returned.
+// If interface_name is a valid interface, a default route will be returned
+// for that specific interface if one exists.
+int dcal_wifi_default_route_pull( laird_session_handle session,
+                                  laird_default_route_handle * default_route,
+                                  char * interface_name);
+
+int dcal_wifi_default_route_close_handle( laird_default_route_handle interface);
+
+int dcal_wifi_default_route_get_interface( laird_default_route_handle default_route,
+                                  char *interface, size_t buf_len);
+
+int dcal_wifi_default_route_get_destination( laird_default_route_handle default_route,
+                                  char *destination, size_t buf_len);
+
+int dcal_wifi_default_route_get_gateway( laird_default_route_handle default_route,
+                                  char *gateway, size_t buf_len);
+
+int dcal_wifi_default_route_get_flags( laird_default_route_handle default_route,
+                                  int *flags);
+
+int dcal_wifi_default_route_get_metric( laird_default_route_handle default_route,
+                                  unsigned int *metric);
+
+int dcal_wifi_default_route_get_subnet_mask( laird_default_route_handle default_route,
+                                  char *subnet_mask, size_t buf_len);
+
+int dcal_wifi_default_route_get_mtu( laird_default_route_handle default_route,
+                                  unsigned int *mtu);
+
+int dcal_wifi_default_route_get_window( laird_default_route_handle default_route,
+                                  unsigned int *window);
+
+int dcal_wifi_default_route_get_irtt( laird_default_route_handle default_route,
+                                  unsigned int *irtt);
 
 // Wifi Scan
 int dcal_wifi_pull_scan_list(laird_session_handle session, size_t *count);
