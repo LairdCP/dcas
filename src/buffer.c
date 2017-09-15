@@ -1927,6 +1927,8 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 	char *filename=NULL;
 	char *full_file_path = NULL;
 	char *buf=NULL;
+	SDCGlobalConfig gcfg = {0};
+	struct stat st = {0};
 
 	fxt = ns(Command_cmd_pl(cmd));
 	if(flatbuffers_string_len(ns(Filexfer_file_path(fxt)))==0)
@@ -1945,6 +1947,23 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 		tmpfile = strdup(full_path);
 		if(tmpfile)
 			filename = strdup(basename(full_path));
+
+		if(ns(Filexfer_cert(fxt))){
+			ret = GetGlobalSettings(&gcfg);
+			if (ret != SDCERR_SUCCESS){
+				DBGERROR("GetGlobalSettings() returned %d at line %d\n", ret, __LINE__);
+				goto cleanup;
+			}
+
+			path = gcfg.certPath;
+		}
+
+		if (stat(path, &st) == -1)
+			if (mkdir(path, mode) != 0){
+				ret = DCAL_WB_INVALID_FILE;
+				DBGERROR("Unable to create directory at line %d\n", __LINE__);
+				goto cleanup;
+			}
 
 		full_file_path = malloc(strlen(path)+strlen(filename)+2);
 		buf = malloc(FILEBUFSZ);
