@@ -852,6 +852,12 @@ int dcal_file_pull_from_wb(laird_session_handle session,
                              char * remote_file_name,
                              char * local_file_name);
 
+// local_cert_name is the full path and file name on local system.
+// files will be transfered to the the certificate path
+// which can be changed by dcal_wifi_global_set_cert_path()
+int dcal_cert_push_to_wb(laird_session_handle session,
+                             char * local_cert_name);
+
 typedef enum _fw_update_flags {
 	FWU_FORCE            = 1 << 0, // force image overwrite
 	FWU_DISABLE_NOTIFY   = 1 << 1, // disable notification when complete

@@ -192,6 +192,7 @@ table Filexfer {
 	file_path: string;
 	size: int;
 	mode: int;
+	cert: bool;
 }
 
 // commands payloads to dcas - can be unused for some commands
