@@ -1030,10 +1030,10 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		//invalid param means interface property wasnt found
 		if(ret == SDCERR_INVALID_CONFIG){
 			DBGERROR("%s IPv4 not found\n",ns(String_value(interface_name)));
-			build_handshake_ack(B, ret);
+			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_INVALID_PARAMETER){
 			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
-			build_handshake_ack(B, ret);
+			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_SUCCESS){
 			ns(Interface_ipv4_add(B, 1));
 
@@ -1088,7 +1088,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					DBGDEBUG("%s AP mode not set\n",ns(String_value(interface_name)));
 			} else {
 				DBGERROR("%s failed to retrieve AP mode information\n",ns(String_value(interface_name)));
-				build_handshake_ack(B, ret);
+				return ret; // process_buffer() builds nack with non-zero return
 			}
 
 			ret = LRD_ENI_GetNat((char*)ns(String_value(interface_name)), &nat);
@@ -1098,17 +1098,17 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					DBGDEBUG("%s IPv4 NAT is not set\n",ns(String_value(interface_name)));
 			} else {
 				DBGERROR("%s failed to retrieve IPv4 NAT information\n",ns(String_value(interface_name)));
-				build_handshake_ack(B, ret);
+				return ret; // process_buffer() builds nack with non-zero return
 			}
 		}
 		//IPv6
 		ret = LRD_ENI_GetMethod6((char*)ns(String_value(interface_name)), method6, sizeof(method6));
 		if(ret == SDCERR_INVALID_CONFIG){
 			DBGERROR("%s IPv6 not found\n",ns(String_value(interface_name)));
-			build_handshake_ack(B, ret);
+			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_INVALID_PARAMETER){
 			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
-			build_handshake_ack(B, ret);
+			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_SUCCESS){
 			ns(Interface_ipv6_add(B, 1));
 
@@ -1149,7 +1149,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					DBGDEBUG("%s IPv6 NAT is not set\n",ns(String_value(interface_name)));
 			} else {
 				DBGERROR("%s failed to retrieve IPv6 NAT information\n",ns(String_value(interface_name)));
-				build_handshake_ack(B, ret);
+				return ret; // process_buffer() builds nack with non-zero return
 			}
 		}
 
@@ -1200,7 +1200,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			ret = LRD_ENI_AddInterface((char*)ns(Interface_interface_name(interface)));
 			SDKUNLOCK(sdk_lock);
 			if(ret){
-				build_handshake_ack(B, ret);
 				return ret;
 			}
 			if (flatbuffers_string_len(ns(Interface_method(interface)))){
@@ -1209,7 +1208,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetMethod() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1219,7 +1217,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetAddress() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1229,7 +1226,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetNetmask() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1239,7 +1235,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetGateway() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1249,7 +1244,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetNameserver() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1259,7 +1253,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetBroadcastAddress() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1270,7 +1263,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_EnableInterface() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1280,7 +1272,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_DisableInterface() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1294,7 +1285,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_SetBridgePorts() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1304,7 +1294,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1316,7 +1305,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_EnableHostAPD() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1326,7 +1314,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_DisableHostAPD() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1338,7 +1325,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_EnableNat() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1348,7 +1334,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_DisableNat() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1361,7 +1346,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			SDKUNLOCK(sdk_lock);
 			if(ret){
 				DBGERROR("LRD_ENI_AddInterface6() returned %d at line %d\n", ret, __LINE__);
-				build_handshake_ack(B, ret);
 				return ret;
 			}
 			if (flatbuffers_string_len(ns(Interface_method6(interface)))){
@@ -1370,7 +1354,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetMethod6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1380,7 +1363,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetDhcp6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1390,7 +1372,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetAddress6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1400,7 +1381,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetNetmask6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1410,7 +1390,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetGateway6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1420,7 +1399,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_SetNameserver6() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1431,7 +1409,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_EnableInterface6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1441,7 +1418,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_DisableInterface6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1453,7 +1429,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_EnableNat6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1463,7 +1438,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_DisableNat6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 				}
@@ -1476,7 +1450,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_AutoStartOn() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1486,7 +1459,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				SDKUNLOCK(sdk_lock);
 				if(ret){
 					DBGERROR("LRD_ENI_AutoStartOff() returned %d at line %d\n", ret, __LINE__);
-					build_handshake_ack(B, ret);
 					return ret;
 				}
 			}
@@ -1501,7 +1473,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1511,7 +1482,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1521,7 +1491,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1531,7 +1500,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1541,7 +1509,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1560,7 +1527,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1570,7 +1536,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1580,7 +1545,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1590,7 +1554,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
@@ -1600,7 +1563,6 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					SDKUNLOCK(sdk_lock);
 					if(ret){
 						DBGERROR("LRD_ENI_ClearProperty6() returned %d at line %d\n", ret, __LINE__);
-						build_handshake_ack(B, ret);
 						return ret;
 					}
 					break;
