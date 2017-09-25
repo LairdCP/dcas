@@ -26,7 +26,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
 #define LAIRD_DCAL_MAJOR    1
-#define LAIRD_DCAL_MINOR    3
+#define LAIRD_DCAL_MINOR    4
 #include "version.h"
 
 #ifdef __cplusplus
