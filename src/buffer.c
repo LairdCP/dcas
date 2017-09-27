@@ -1022,23 +1022,36 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		ns(Interface_bridge_add(B, 0));
 		ns(Interface_ap_mode_add(B, 0));
 
+// Need to determine if the interface exists and return error if not.
+// Elements of an interface that are not present are not errors and should
+// not generate nacks.
+// LRD_ENI_GetAutoStart() can be used to determine if an interface is
+// present so do that call first.
+
+		SDKLOCK(sdk_lock);
+		ret = LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
+		SDKUNLOCK(sdk_lock);
+		if (ret==SDCERR_INVALID_CONFIG) {
+			DBGINFO("%s: interface ->%s<- does not exist\n",__func__, ns(String_value(interface_name)));
+			return ret; // process_buffer() builds nack with non-zero return
+		}
+
 		SDKLOCK(sdk_lock);
 		//IPv4
 		ret = LRD_ENI_GetMethod((char*)ns(String_value(interface_name)), method, sizeof(method));
 		SDKUNLOCK(sdk_lock);
-		//invalid config means interface doesnt exist, ipv6 present but ipv4 is not or vice versa.
-		//invalid param means interface property wasnt found
+		//invalid config means no ipv4. (we already checked that interface exists)
 		if(ret == SDCERR_INVALID_CONFIG){
-			DBGERROR("%s IPv4 not found\n",ns(String_value(interface_name)));
-			return ret; // process_buffer() builds nack with non-zero return
+			DBGINFO("%s IPv4 not found\n",ns(String_value(interface_name)));
+			// This is not an error as there should be ipv6 data
 		} else if (ret == SDCERR_INVALID_PARAMETER){
-			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
+			DBGERROR("LRD_ENI_GetMethod returned %d near line %d\n",ret,__LINE__);
 			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_SUCCESS){
+			// we have ipv4 data
 			ns(Interface_ipv4_add(B, 1));
 
 			SDKLOCK(sdk_lock);
-			LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
 			ret = LRD_ENI_GetInterfacePropertyValue((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_ADDRESS, address, sizeof(address));
 			if (ret != SDCERR_SUCCESS){
 				address[0] = '\0';
@@ -1088,6 +1101,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					DBGDEBUG("%s AP mode not set\n",ns(String_value(interface_name)));
 			} else {
 				DBGERROR("%s failed to retrieve AP mode information\n",ns(String_value(interface_name)));
+				SDKUNLOCK(sdk_lock);
 				return ret; // process_buffer() builds nack with non-zero return
 			}
 
@@ -1102,17 +1116,18 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			}
 		}
 		//IPv6
+		SDKLOCK(sdk_lock);
 		ret = LRD_ENI_GetMethod6((char*)ns(String_value(interface_name)), method6, sizeof(method6));
+		SDKUNLOCK(sdk_lock);
 		if(ret == SDCERR_INVALID_CONFIG){
 			DBGERROR("%s IPv6 not found\n",ns(String_value(interface_name)));
-			return ret; // process_buffer() builds nack with non-zero return
+			// This is not an error as there should be ipv4 data
 		} else if (ret == SDCERR_INVALID_PARAMETER){
 			DBGERROR("LRD_ENI_GetMethod returned %d at line %d\n",ret,__LINE__);
 			return ret; // process_buffer() builds nack with non-zero return
 		} else if (ret == SDCERR_SUCCESS){
 			ns(Interface_ipv6_add(B, 1));
-
-			LRD_ENI_GetAutoStart((char*)ns(String_value(interface_name)), &auto_start);
+			SDKLOCK(sdk_lock);
 			ret = LRD_ENI_GetInterfacePropertyValue6((char*)ns(String_value(interface_name)), (char*) LRD_ENI_PROPERTY_DHCP, dhcp6, sizeof(dhcp6));
 			if (ret != SDCERR_SUCCESS){
 				dhcp6[0] = '\0';
@@ -1149,8 +1164,10 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 					DBGDEBUG("%s IPv6 NAT is not set\n",ns(String_value(interface_name)));
 			} else {
 				DBGERROR("%s failed to retrieve IPv6 NAT information\n",ns(String_value(interface_name)));
+				SDKUNLOCK(sdk_lock);
 				return ret; // process_buffer() builds nack with non-zero return
 			}
+			SDKUNLOCK(sdk_lock);
 		}
 
 		ns(Interface_auto_start_add(B, auto_start));
@@ -1572,7 +1589,7 @@ int do_set_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			}
 		}
 	} else {
-		DBGERROR("Invalid name %s\n", (char*)ns(Interface_interface_name(interface)));
+		DBGERROR("Invalid name: ->%s<-\n", (char*)ns(Interface_interface_name(interface)));
 		ret = SDCERR_INVALID_NAME;
 	}
 
