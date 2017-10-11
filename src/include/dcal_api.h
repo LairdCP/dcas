@@ -26,7 +26,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
 #define LAIRD_DCAL_MAJOR    1
-#define LAIRD_DCAL_MINOR    4
+#define LAIRD_DCAL_MINOR    5
 #include "version.h"
 
 #ifdef __cplusplus
@@ -530,10 +530,8 @@ int dcal_wifi_interface_clear_property6( laird_interface_handle interface,
                                   INTERFACE_PROPERTY prop6);
 
 // Interface Lease Management
-// the create function will allocate a laird_lease_handle
-// that will require the close_handle function to be called when done with the
-// handle
-int dcal_wifi_lease_create( laird_lease_handle * lease);
+// dcal_wifi_lease_pull will require the close_handle function to be called
+// when done with the handle
 int dcal_wifi_lease_pull( laird_session_handle session,
                                   laird_lease_handle * lease,
                                   char * interfaceName);
@@ -577,10 +575,8 @@ int dcal_wifi_lease_get_expire( laird_lease_handle lease,
                                   char *expire, size_t buf_len);
 
 // Interface Default route Management
-// the create function will allocate a laird_default_route_handle
-// that will require the close_handle function to be called when done with the
-// handle
-int dcal_wifi_default_route_create( laird_default_route_handle * default_route);
+// dcal_wifi_default_route_pull will require the close_handle function to be called
+// when done with the handle.
 // If interface_name pointer is NULL, the first default route will be returned.
 // If interface_name is a valid interface, a default route will be returned
 // for that specific interface if one exists.
