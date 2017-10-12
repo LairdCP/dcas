@@ -6,6 +6,7 @@
 #define MAX_PATH 128
 #define MAX_THREADS 20
 
+// A variable of this structure contains data that is available to all threads
 struct SSH_DATA {
 	bool alive;
 	bool reboot_on_exit;

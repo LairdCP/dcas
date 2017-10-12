@@ -2480,6 +2480,6 @@ respond_with_error: // allow for exit with 0 or negative return
 	flatcc_builder_clear(&builder);
 
 	buftype = verify_buffer(*buf, nbytes);
-	DBGINFO("outbound buf hash: %x; is type %s\n", flatbuffers_get_type_hash(buf), buftype_to_string( buftype ));
+	DBGINFO("outbound buf is type %s\n", buftype_to_string( buftype ));
 	return nbytes;
 }
