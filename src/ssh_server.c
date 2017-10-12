@@ -32,21 +32,112 @@ struct THREAD_LIST{
 	pthread_mutex_t lock;
 };
 
+// the authentication process is single threaded so a variable of this type can be reused for each auth.
+struct AUTH_DATA {
+	int auth;
+	int auth_error;
+	int attempts; // used for password auth
+	ssh_channel *chan; // *chan is a reference pointer and the creating/free is handled outside of this reference
+};
+
 struct DISPATCH_DATA {
 	ssh_session session;
 	bool *alive;
 	bool *exit_called;
-	pthread_mutex_t sdk_lock;
+	pthread_mutex_t sdk_lock; // SDK is not multithread safe. 
+	pthread_mutex_t auth_lock;  // allow one authentication at a time - simplifies sharing of cb data
 	sem_t thread_init; // used between dispatcher and thread to know when
 	                   // safe to reuse dispatcher's stack variable
 	sem_t *thread_list;// used to limit total active threads
 	struct THREAD_LIST completed;
+	struct AUTH_DATA * auth_data;
 };
 
 #define DUMP_LOCATION printf("%s\t%s:%d\n",__FILE__,__func__,__LINE__);
 
-// when a thread completes, it calls this routine so that it's thread ID
-// can be queued.  At a later point, the list will be emptied and the
+// - Authentication functions
+int auth_password (ssh_session session, const char *user,
+                                        const char *password,
+                                        void *userdata)
+{
+	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
+	DBGINFO("Authenticating user ->%s<-\n", user);
+	auth_data->auth = auth_data->auth_error = 0;
+	if(auth_data->attempts++ >= 3){
+		DBGINFO("Max Attempts reached\n");
+		auth_data->auth_error=1;
+		return SSH_AUTH_DENIED;
+	}
+	if(strcmp(user, SSHD_USER))
+		return SSH_AUTH_DENIED;
+	if(strcmp(password, SSHD_PASSWORD))
+		return SSH_AUTH_DENIED;
+	auth_data->auth = 1;
+	return SSH_AUTH_SUCCESS; // authenticated
+}
+
+int auth_publickey(ssh_session session, const char *user,
+                                        struct ssh_key_struct *pubkey,
+                                        char signature_state,
+                                        void *userdata)
+{
+	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
+	DBGINFO("%s entry\n", __func__);
+
+	auth_data->auth = 0;
+		return SSH_AUTH_DENIED;
+	return SSH_AUTH_SUCCESS; // authenticated
+
+}
+
+// This function is only to allow ssh app connections used for debugging
+static int pty_request(ssh_session session, ssh_channel channel, const char *term, int x,int y, int px, int py, void *userdata){
+	(void) session;
+	(void) channel;
+	(void) term;
+	(void) x;
+	(void) y;
+	(void) px;
+	(void) py;
+	(void) userdata;
+	DBGINFO("Allocated terminal\n");
+	return 0;
+}
+
+// This function is only to allow ssh app connections used for debugging
+static int shell_request(ssh_session session, ssh_channel channel, void *userdata){
+	(void)session;
+	(void)channel;
+	(void)userdata;
+	DBGINFO("Allocated shell\n");
+	return 0;
+}
+
+struct ssh_channel_callbacks_struct channel_cb = {
+    .channel_pty_request_function = pty_request,
+    .channel_shell_request_function = shell_request
+};
+
+static ssh_channel new_session_channel(ssh_session session, void *userdata){
+	(void) session;
+
+	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
+	if(*auth_data->chan != NULL){
+		auth_data->auth_error =1;
+		return NULL;
+	}
+	DBGINFO("Allocated session channel\n");
+	*auth_data->chan = ssh_channel_new(session);
+	// the following are only needed if we want the ssh app to connect for debug purposes.  dcal does not need pty nor shell.
+	ssh_callbacks_init(&channel_cb);
+	ssh_set_channel_callbacks(*auth_data->chan, &channel_cb);
+	return *auth_data->chan;
+}
+
+// - server thread functions
+
+// when a thread completes, it calls this routine so that it's thread id
+// can be queued.  at a later point, the list will be emptied and the
 // thread's resources will be recovered by a pthread_join() call
 void add_thread_to_completed_list( struct THREAD_LIST *completed, pthread_t data)
 {
@@ -88,74 +179,23 @@ void empty_completed_thread_list( struct THREAD_LIST *completed)
 	pthread_mutex_unlock(&completed->lock);
 }
 
-static int auth_password(const char *user, const char *password)
-{
-	if(strcmp(user, SSHD_USER))
-		return 0;
-	if(strcmp(password, SSHD_PASSWORD))
-		return 0;
-	return 1; // authenticated
-}
-
-static int authenticate(ssh_session session)
-{
-	ssh_message message;
-
-	do {
-		message=ssh_message_get(session);
-		if(!message)
-			break;
-		switch(ssh_message_type(message)) {
-		case SSH_REQUEST_AUTH:
-			switch(ssh_message_subtype(message)) {
-			case SSH_AUTH_METHOD_PASSWORD:
-				DBGINFO("User %s wants to auth with pass %s\n",
-				       ssh_message_auth_user(message),
-				       ssh_message_auth_password(message));
-				if(auth_password(ssh_message_auth_user(message),
-				                 ssh_message_auth_password(message))) {
-					ssh_message_auth_reply_success(message,0);
-					ssh_message_free(message);
-					return 1;
-				}
-				ssh_message_auth_set_methods(message,
-				                             SSH_AUTH_METHOD_PASSWORD |
-				                             SSH_AUTH_METHOD_INTERACTIVE);
-				// not authenticated, send default message
-				ssh_message_reply_default(message);
-				break;
-			case SSH_AUTH_METHOD_NONE:
-			default:
-				DBGINFO("User %s wants to auth with unknown auth %d\n",
-				       ssh_message_auth_user(message),
-				       ssh_message_subtype(message));
-				ssh_message_auth_set_methods(message,
-				                             SSH_AUTH_METHOD_PASSWORD);
-				ssh_message_reply_default(message);
-				break;
-			}
-			break;
-		default:
-			ssh_message_auth_set_methods(message,
-			                             SSH_AUTH_METHOD_PASSWORD);
-			ssh_message_reply_default(message);
-		}
-		ssh_message_free(message);
-	} while (1);
-	return 0;
-}
-
 void * ssh_session_thread( void *param )
 {
-	ssh_message message;
 	process_buf_struct buf_struct = {0};
 	ssh_channel chan=0;
-	int nbytes, auth=0;
+	int nbytes, r;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
-	bool *alive;
+	struct AUTH_DATA *auth_data = dispatch_data->auth_data;
+	bool *alive, clear_lock = 1;
 	ssh_session session;
 	size_t nwritten, *const buf_size = &buf_struct.buf_size;
 	char **const buf = &buf_struct.buf;
+	ssh_event mainloop;
+
+	auth_data->chan = &chan;
+	auth_data->auth=0;
+	auth_data->auth_error=0;
+	auth_data->attempts=0;
 
 	alive = dispatch_data->alive;     //read only. Only set by dispatch or signal catch
 	session = dispatch_data->session; //we will be responsible for session now
@@ -169,6 +209,7 @@ void * ssh_session_thread( void *param )
 	buf_struct.exit_called = dispatch_data->exit_called;
 	buf_struct.sdk_lock = &dispatch_data->sdk_lock;
 	buf_struct.verify_handshake = true;
+	buf_struct.chan = chan;
 
 	if (ssh_handle_key_exchange(session)) {
 		DBGERROR("Error: ssh_void handle_key_exchange: %s\n", ssh_get_error(session));
@@ -180,32 +221,41 @@ void * ssh_session_thread( void *param )
 		goto exit_session;
 	}
 
-	/* proceed to authentication */
-	auth = authenticate(session);
-	if(!auth) {
+	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_NONE);
+
+	mainloop = ssh_event_new();
+	if (mainloop==NULL){
+		DBGERROR("ssh_event_new() failed.  Error: %s\n", ssh_get_error(session));
+		goto exit_disconnect;
+	}
+
+	if (!(ssh_event_add_session(mainloop, session)==SSH_OK)){
+		DBGERROR("ssh_event_add_session() failed.  Error: %s\n", ssh_get_error(session));
+		goto exit_disconnect;
+	}
+
+	while(!(auth_data->auth && chan != NULL))
+	{
+		if (auth_data->auth_error)
+			break;
+		r = ssh_event_dopoll(mainloop, -1);
+		if (r == SSH_ERROR){
+			DBGERROR("ssh_event_dopoll() error: %s\n", ssh_get_error(session));
+			break;
+		}
+	}
+
+	if(!auth_data->auth) {
 		DBGERROR("Authentication error: %s\n", ssh_get_error(session));
 		goto exit_disconnect;
 	}
 
 	DBGINFO("**** Successful connection\n");
-	/* wait for a channel session */
-	do {
-		message = ssh_message_get(session);
-		if(message) {
-			if(ssh_message_type(message) == SSH_REQUEST_CHANNEL_OPEN &&
-			    ssh_message_subtype(message) == SSH_CHANNEL_SESSION) {
-				chan = ssh_message_channel_request_open_reply_accept(message);
-				buf_struct.chan = chan;
-				ssh_message_free(message);
-				break;
-			} else {
-				ssh_message_reply_default(message);
-				ssh_message_free(message);
-			}
-		} else {
-			break;
-		}
-	} while(!chan && *alive);
+	DBGDEBUG("AUTH_LOCK unlock line %d\n", __LINE__);
+	//clear data from cb's user data:  (just paranoid - likely not necessary)
+	memset(auth_data, 0, sizeof(*auth_data));
+	clear_lock =0;
+	pthread_mutex_unlock(&dispatch_data->auth_lock);
 
 	if(!*alive) {
 		DBGINFO("Alive indicator has been disabled\n");
@@ -219,7 +269,6 @@ void * ssh_session_thread( void *param )
 	}
 
 	DBGDEBUG("Client connected!\n");
-
 	int extra;
 	do {
 		nbytes=ssh_channel_read(chan,*buf, *buf_size, 0);
@@ -288,6 +337,7 @@ void * ssh_session_thread( void *param )
 exit_channel:
 	if (chan)
 		ssh_channel_close(chan);
+	chan = NULL;
 exit_disconnect:
 	ssh_disconnect(session);
 exit_session:
@@ -295,6 +345,10 @@ exit_session:
 	session = NULL;
 	if(buf_struct.buf)
 		free(buf_struct.buf);
+	if(clear_lock) {
+		DBGDEBUG("AUTH_LOCK unlock line %d\n", __LINE__);
+		pthread_mutex_unlock(&dispatch_data->auth_lock);
+	}
 
 	add_thread_to_completed_list( &dispatch_data->completed,
 	                               pthread_self());
@@ -326,11 +380,24 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	pthread_t child;
 	struct timespec sleep_duration;
 	struct DISPATCH_DATA dispatch_data = {0};
+	struct AUTH_DATA auth_data= {0};
+	struct ssh_server_callbacks_struct cb = {
+		.userdata = &auth_data,
+		.auth_password_function = auth_password,
+		.auth_pubkey_function = auth_publickey,
+		.channel_open_request_session_function = new_session_channel
+	};
+	dispatch_data.auth_data = &auth_data;
 
-	i = 10;
+	if (cb.userdata == ssh_data)
+		DBGINFO("pointers are the same\n");
+
+	ssh_callbacks_init(&cb);
+
 	sleep_duration.tv_sec =0;
 	sleep_duration.tv_nsec = 10000000; // 10 ms
 
+	i = 10;
 	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.sdk_lock,NULL),
 	                           EAGAIN, &i, &sleep_duration));
 	if (r)
@@ -341,6 +408,15 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 	i=10;
 	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.completed.lock,NULL),
+	                           EAGAIN, &i, &sleep_duration));
+	if (r)
+	{
+		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
+		return 1;
+	}
+
+	i=10;
+	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.auth_lock,NULL),
 	                           EAGAIN, &i, &sleep_duration));
 	if (r)
 	{
@@ -387,17 +463,22 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 		empty_completed_thread_list(&dispatch_data.completed);
 
+		pthread_mutex_lock(&dispatch_data.auth_lock);
+		DBGDEBUG("AUTH_LOCK lock\n");
+
 		dispatch_data.session = ssh_new();
 		r = ssh_bind_accept(*sshbind, dispatch_data.session);
 
 		if(r==SSH_ERROR) {
-			//TODO - determine if we should stay running or exit the application
 			if (ssh_data->alive)
 				DBGERROR("Error accepting a connection: %s\n", ssh_get_error(*sshbind));
 			ssh_free(dispatch_data.session);
 			dispatch_data.session = NULL;
 			continue;
 		}
+
+		ssh_set_server_callbacks(dispatch_data.session, &cb);
+
 		i = 10;
 		while (check_with_timeout (r=pthread_create(&child, NULL,
 		                                            &ssh_session_thread, &dispatch_data),
@@ -407,6 +488,8 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 			ssh_data->alive = false; // kill any children
 			ssh_free(dispatch_data.session);
 			r=1;
+			DBGDEBUG("AUTH_LOCK unlock at %d\n", __LINE__);
+			pthread_mutex_unlock(&dispatch_data.auth_lock);
 			break; // abort while loop
 		}
 		sem_wait(&dispatch_data.thread_init); // wait for child to copy data from stack
@@ -415,14 +498,14 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	empty_completed_thread_list(&dispatch_data.completed);
 
 cleanup:
-		ssh_bind_free(*sshbind);
+	ssh_bind_free(*sshbind);
 	ssh_finalize();
 	pthread_mutex_destroy(&(dispatch_data.sdk_lock));
+	pthread_mutex_destroy(&(dispatch_data.auth_lock));
 	pthread_mutex_destroy(&dispatch_data.completed.lock);
 
 	if (*dispatch_data.exit_called){
 		// call system's reboot command rather then reboot API directly as the system version may do additional syncing.
-		//TODO - we may only want to support this on WBs rather then all
 		printf("***** calling reboot *****\n");
 		system("reboot");
 	}
