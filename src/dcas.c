@@ -16,13 +16,15 @@ void PrintHelp( void );
 void ExitClean( int ExitVal );
 
 static char * runtime_name = "";
-#define DEFAULT_KEYS_FOLDER "/etc/dcas"
+#define DEFAULT_KEYS_FOLDER "/etc/ssh"
+#define DEFAULT_AUTH_FOLDER "~/.ssh"
 
 static struct SSH_DATA ssh_data = {
 	.alive = true,
 	.reboot_on_exit = false,
 	.port = 2222,
 	.verbosity = 0,
+	.ssh_disconnect = false,
 };
 
 void sigproc(int unused)
@@ -45,12 +47,12 @@ int main(int argc,char *argv[])
 
 	// Define the options structure
 	static struct option longopt[] = {
-		{"daemon", no_argument, NULL, 'D'},
-		{"keys", required_argument, NULL, 'k'},
+		{"host_keys", required_argument, NULL, 'k'},
+		{"auth_keys", required_argument, NULL, 'a'},
 		{"help", no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'v'},
 		{"port", required_argument, NULL, 'p'},
-		//TODO: add a verbose or logging flag
+		{"ssh_disconnect", no_argument, NULL, 's'},
 		{NULL, 0, NULL, 0}
 	};
 
@@ -66,20 +68,24 @@ int main(int argc,char *argv[])
 	DBGDEBUG("%s\n", cmdline);
 #endif
 
-	strncpy(ssh_data.keys_folder, DEFAULT_KEYS_FOLDER, MAX_PATH-1);
+	strncpy(ssh_data.host_keys_folder, DEFAULT_KEYS_FOLDER, MAX_PATH-1);
+	strncpy(ssh_data.auth_keys_folder, DEFAULT_AUTH_FOLDER, MAX_PATH-1);
+ssh_data.host_keys_folder[MAX_PATH-1] = 0;
+ssh_data.auth_keys_folder[MAX_PATH-1] = 0;
 
 	// Process command-line options
 	runtime_name = argv[0]; // Save if needed later
 	int c;
 	int optidx=0;
-	while ((c=getopt_long(argc,argv,"Dk:hvp:",longopt,&optidx)) != -1) {
+	while ((c=getopt_long(argc,argv,"k:a:hvp:s",longopt,&optidx)) != -1) {
 		switch(c) {
-		case 'D':
-			DBGDEBUG("Daemon mode enabled\n");
-			break;
 		case 'k':
-			DBGDEBUG( "Setting key directory:%s\n", optarg );
-			strncpy(ssh_data.keys_folder, optarg, MAX_PATH-1);
+			DBGDEBUG( "Setting host key directory:%s\n", optarg );
+			strncpy(ssh_data.host_keys_folder, optarg, MAX_PATH-1);
+			break;
+		case 'a':
+			DBGDEBUG( "Setting auth key directory:%s\n", optarg );
+			strncpy(ssh_data.auth_keys_folder, optarg, MAX_PATH-1);
 			break;
 		case 'v':
 			PrintVersion();
@@ -92,6 +98,10 @@ int main(int argc,char *argv[])
 		case 'p':
 			ssh_data.port = atoi(optarg);
 			DBGDEBUG("Setting port to %d\n", ssh_data.port);
+			break;
+		case 's':
+			ssh_data.ssh_disconnect=true;
+			DBGDEBUG("ssh_disconnection option enabled\n");
 			break;
 		}
 	}
@@ -120,11 +130,13 @@ void PrintHelp( void )
 	       "\thost to be able to configure the WB system.\n\n"
 	       "\tUsage:\n"
 	       "\t%s [-Dkvhp]\n\n"
-	       "\t\t-D\t\tDaemon mode\n"
-	       "\t\t-k <path>\tkey directory path\n"
+	       "\t\t-k <path>\thost key directory path\n"
+	       "\t\t-a <path>\tauthorized_keys directory path\n"
+	       "\t\t-p <port>\ttcp port to listen for connections\n"
+	       "\t\t-s\tssh_disable - disables WiFi on last authorized ssh \n"
+	                             "session disconnect"
 	       "\t\t-v\t\tversion\n"
 	       "\t\t-h\t\thelp\n"
-	       "\t\t-p <port>\ttcp port to listen for connections\n"
 	       "\n\n", runtime_name);
 }
 
