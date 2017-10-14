@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <signal.h>
 #define __USE_POSIX199309
 #include <time.h>
@@ -16,6 +17,7 @@
 #include <libssh/libssh.h>
 #include <libssh/server.h>
 #include <libssh/callbacks.h>
+#include <sdc_sdk.h>
 #include "ssh_server.h"
 
 #define SSHD_USER "libssh"
@@ -38,6 +40,7 @@ struct AUTH_DATA {
 	int auth_error;
 	int attempts; // used for password auth
 	ssh_channel *chan; // *chan is a reference pointer and the creating/free is handled outside of this reference
+	struct SSH_DATA *ssh_data;
 };
 
 struct DISPATCH_DATA {
@@ -51,6 +54,8 @@ struct DISPATCH_DATA {
 	sem_t *thread_list;// used to limit total active threads
 	struct THREAD_LIST completed;
 	struct AUTH_DATA * auth_data;
+	struct SSH_DATA *ssh_data;
+	sem_t auth_clients_sem;
 };
 
 #define DUMP_LOCATION printf("%s\t%s:%d\n",__FILE__,__func__,__LINE__);
@@ -61,7 +66,7 @@ int auth_password (ssh_session session, const char *user,
                                         void *userdata)
 {
 	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
-	DBGINFO("Authenticating user ->%s<-\n", user);
+	DBGINFO("%s: Authenticating user ->%s<-\n", __func__, user);
 	auth_data->auth = auth_data->auth_error = 0;
 	if(auth_data->attempts++ >= 3){
 		DBGINFO("Max Attempts reached\n");
@@ -82,12 +87,84 @@ int auth_publickey(ssh_session session, const char *user,
                                         void *userdata)
 {
 	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
-	DBGINFO("%s entry\n", __func__);
+	DBGINFO("%s Authenticating user ->%s<-\n", __func__, user);
 
-	auth_data->auth = 0;
+	if (signature_state == SSH_PUBLICKEY_STATE_NONE){
+		DBGINFO("Partial auth \n");
+		return SSH_AUTH_SUCCESS;
+	}
+
+	if (signature_state != SSH_PUBLICKEY_STATE_VALID){
+		DBGINFO("PUBLIC KEY INVALID\n");
 		return SSH_AUTH_DENIED;
-	return SSH_AUTH_SUCCESS; // authenticated
+	}
 
+	// valid so far.  Now look through keys for a match
+	if (auth_data->ssh_data)
+	{
+		char ffn[1024]; //full filename and path
+		ssh_key key;
+		int result;
+		struct stat buf;
+
+		snprintf(ffn, 1024, "%s/authorized_keys",
+		                      auth_data->ssh_data->auth_keys_folder);
+		if (stat(ffn, &buf) == 0){
+			result = ssh_pki_import_pubkey_file( ffn, &key );
+			if ((result != SSH_OK) || (key==NULL))
+				DBGINFO("unable to import public key file %s\n", ffn);
+			else{
+				result = ssh_key_cmp( key, pubkey, SSH_KEY_CMP_PUBLIC );
+				ssh_key_free(key);
+				if (result == 0) {
+					auth_data->auth = 1;
+					DBGINFO("key match\n");
+					return SSH_AUTH_SUCCESS;
+				}
+			}
+		}else
+			DBGDEBUG("%s file missing\n", ffn);
+
+#if 0
+		// this code was when I was iterating through every file.
+		// will remove once its in git so I have history of it should I need it
+		DIR *entry;
+		struct dirent *dir;
+		char path[1024];
+		snprintf(path, 1024, "%s/", auth_data->ssh_data->keys_folder);
+		entry = opendir(path);
+		if (entry) {
+			while ((dir = readdir(entry)) != NULL) {
+				if (dir->d_type == DT_REG) {
+					snprintf(ffn, 1024, "%s/%s", path, dir->d_name);
+					DBGINFO("trying %s\n", ffn);
+					result = ssh_pki_import_pubkey_file( ffn, &key );
+					if ((result != SSH_OK) || (key==NULL)){
+						DBGINFO("skipping\n");
+						continue;
+					}
+					result = ssh_key_cmp( key, pubkey, SSH_KEY_CMP_PUBLIC );
+					DBGINFO("Result is %d\n", result);
+					ssh_key_free(key);
+					if (result == 0) {
+						auth_data->auth = 1;
+						DBGINFO("key match\n");
+						closedir(entry);
+						return SSH_AUTH_SUCCESS;
+					}
+					DBGINFO("key mismatch\n");
+				}
+			}
+			closedir(entry);
+		} else
+			DBGERROR("unable to open key directory :%s\n", path);
+#endif
+	} else
+		DBGERROR("missing ssh_data\n");
+
+	// no matches
+	auth_data->auth = 0;
+	return SSH_AUTH_DENIED;
 }
 
 // This function is only to allow ssh app connections used for debugging
@@ -137,7 +214,7 @@ static ssh_channel new_session_channel(ssh_session session, void *userdata){
 // - server thread functions
 
 // when a thread completes, it calls this routine so that it's thread id
-// can be queued.  at a later point, the list will be emptied and the
+// can be queued. At a later point, the list will be emptied and the
 // thread's resources will be recovered by a pthread_join() call
 void add_thread_to_completed_list( struct THREAD_LIST *completed, pthread_t data)
 {
@@ -186,11 +263,13 @@ void * ssh_session_thread( void *param )
 	int nbytes, r;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
 	struct AUTH_DATA *auth_data = dispatch_data->auth_data;
+	struct SSH_DATA *ssh_data = dispatch_data->ssh_data;
 	bool *alive, clear_lock = 1;
 	ssh_session session;
 	size_t nwritten, *const buf_size = &buf_struct.buf_size;
 	char **const buf = &buf_struct.buf;
 	ssh_event mainloop;
+	int num_clients=0;
 
 	auth_data->chan = &chan;
 	auth_data->auth=0;
@@ -212,7 +291,7 @@ void * ssh_session_thread( void *param )
 	buf_struct.chan = chan;
 
 	if (ssh_handle_key_exchange(session)) {
-		DBGERROR("Error: ssh_void handle_key_exchange: %s\n", ssh_get_error(session));
+		DBGERROR("Error: ssh_handle_key_exchange: %s\n", ssh_get_error(session));
 		goto exit_session;
 	}
 
@@ -221,7 +300,9 @@ void * ssh_session_thread( void *param )
 		goto exit_session;
 	}
 
-	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_NONE);
+// TODO - only allow password if startup parameter present
+//	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_PUBLICKEY);
+	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PUBLICKEY);
 
 	mainloop = ssh_event_new();
 	if (mainloop==NULL){
@@ -249,6 +330,9 @@ void * ssh_session_thread( void *param )
 		DBGERROR("Authentication error: %s\n", ssh_get_error(session));
 		goto exit_disconnect;
 	}
+
+//increment authorized client count
+	sem_post(&dispatch_data->auth_clients_sem);
 
 	DBGINFO("**** Successful connection\n");
 	DBGDEBUG("AUTH_LOCK unlock line %d\n", __LINE__);
@@ -334,6 +418,16 @@ void * ssh_session_thread( void *param )
 	else
 		DBGDEBUG("Read thread exiting due to EOF on channel\n");
 
+//only decrement the auth client count if leaving a thread that was authenticated
+	sem_wait(&dispatch_data->auth_clients_sem);
+
+	sem_getvalue(&dispatch_data->auth_clients_sem, &num_clients);
+
+	if((ssh_data->ssh_disconnect) && (num_clients==0)){
+		DBGINFO("Lost last ssh session - disabling radio\n");
+		RadioDisable();
+	}
+
 exit_channel:
 	if (chan)
 		ssh_channel_close(chan);
@@ -356,6 +450,8 @@ exit_session:
 	if (*buf_struct.exit_called)
 		kill(getpid(), SIGINT);
 	DBGDEBUG("thread exiting\n");
+
+
 	return NULL;
 }
 
@@ -383,14 +479,13 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	struct AUTH_DATA auth_data= {0};
 	struct ssh_server_callbacks_struct cb = {
 		.userdata = &auth_data,
-		.auth_password_function = auth_password,
 		.auth_pubkey_function = auth_publickey,
 		.channel_open_request_session_function = new_session_channel
 	};
 	dispatch_data.auth_data = &auth_data;
 
-	if (cb.userdata == ssh_data)
-		DBGINFO("pointers are the same\n");
+//todo allow this if set on startup parameter
+//	cb.auth_password_function = auth_password;
 
 	ssh_callbacks_init(&cb);
 
@@ -424,11 +519,14 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 		return 1;
 	}
 
+	sem_init(&dispatch_data.auth_clients_sem, 0, 0);
+
 	dispatch_data.alive = &ssh_data->alive;
 	dispatch_data.exit_called = &ssh_data->reboot_on_exit;
 
 	dispatch_data.thread_list = &ssh_data->thread_list;
 	dispatch_data.completed.head = NULL;
+	dispatch_data.ssh_data = ssh_data;
 
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
@@ -439,11 +537,13 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
 
-	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
+	strncpy(key_tmp, ssh_data->host_keys_folder, MAX_PATH);
 	strncat(key_tmp, "/ssh_host_dsa_key", MAX_PATH);
+	DBGINFO("DSA host key: %s\n",key_tmp);
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
-	strncpy(key_tmp, ssh_data->keys_folder, MAX_PATH);
+	strncpy(key_tmp, ssh_data->host_keys_folder, MAX_PATH);
 	strncat(key_tmp, "/ssh_host_rsa_key", MAX_PATH);
+	DBGINFO("RSA host key: %s\n",key_tmp);
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
 
 	if(ssh_bind_listen(*sshbind)<0) {
@@ -465,6 +565,7 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 		pthread_mutex_lock(&dispatch_data.auth_lock);
 		DBGDEBUG("AUTH_LOCK lock\n");
+		auth_data.ssh_data = ssh_data;
 
 		dispatch_data.session = ssh_new();
 		r = ssh_bind_accept(*sshbind, dispatch_data.session);
@@ -498,6 +599,7 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	empty_completed_thread_list(&dispatch_data.completed);
 
 cleanup:
+	sem_destroy(&dispatch_data.auth_clients_sem);
 	ssh_bind_free(*sshbind);
 	ssh_finalize();
 	pthread_mutex_destroy(&(dispatch_data.sdk_lock));
