@@ -47,22 +47,26 @@ verify_host_ssh_keys() {
   host_keys_dir=$(parse dcas_host_keys_dir $CONF_FILE)
   [ -z "$host_keys_dir" ] && host_keys_dir="$DEFAULT_HOST_KEYS_DIR"
 
-  RSA_KEY="$host_keys_dir/ssh_host_rsa_key"
-
-  if [ ! -s "$RSA_KEY" ]
-  then
-    echo Generating RSA key... \(may take awhile - only done once\)
-    mkdir -p $host_keys_dir
-    /usr/bin/ssh-keygen -t rsa -f "$RSA_KEY" -C '' -N ''
-  fi
-
   DSA_KEY="$host_keys_dir/ssh_host_dsa_key"
 
   if [ ! -s "$DSA_KEY" ]
   then
     echo Generating DSA key... \(may take awhile - only done once\)
     mkdir -p $host_keys_dir
-    /usr/bin/ssh-keygen -t rsa -f "$DSA_KEY" -C '' -N ''
+    /usr/bin/ssh-keygen -t dsa -f "$DSA_KEY"dcas -C '' -N ''
+    mv -f "$DSA_KEY"dcas.pub "$DSA_KEY".pub
+    mv -f "$DSA_KEY"dcas "$DSA_KEY"
+  fi
+
+  RSA_KEY="$host_keys_dir/ssh_host_rsa_key"
+
+  if [ ! -s "$RSA_KEY" ]
+  then
+    echo Generating RSA key... \(may take awhile - only done once\)
+    mkdir -p $host_keys_dir
+    /usr/bin/ssh-keygen -t rsa -f "$RSA_KEY"dcas -C '' -N ''
+    mv -f "$RSA_KEY"dcas.pub "$RSA_KEY".pub
+    mv -f "$RSA_KEY"dcas "$RSA_KEY"
   fi
 
 }
@@ -80,8 +84,14 @@ start() {
 
     [ `grep ^ssh_disable $CONF_FILE` ] && ssh_disable="-s" || ssh_disable=
 
+    username=$(parse username $CONF_FILE)
+    [ ! -z "$username" ] && username="-u ${username}"
+
+    password=$(parse password $CONF_FILE)
+    [ ! -z "$password" ] && password="-P ${password}"
+
     echo "Starting dcas"
-    /usr/bin/dcas -k $host_keys_dir -a $auth_keys_dir -p $dcas_port $ssh_disable 2>&1 | logger &
+    /usr/bin/dcas -k $host_keys_dir -a $auth_keys_dir -p $dcas_port $ssh_disable $username $password 2>&1 | logger &
 }
 
 stop() {
