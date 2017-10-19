@@ -26,7 +26,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
 #define LAIRD_DCAL_MAJOR    1
-#define LAIRD_DCAL_MINOR    5
+#define LAIRD_DCAL_MINOR    6
 #include "version.h"
 
 #ifdef __cplusplus
@@ -95,6 +95,10 @@ typedef char ipv6_str_type[IP6_STR_SZ];
 
 #define STR_SZ 80
 
+// bitwise methods
+#define METHOD_PUBKEY   1
+#define METHOD_PASSWORD 2
+
 // API session management
 
 int dcal_session_create( laird_session_handle * session);
@@ -102,7 +106,8 @@ int dcal_set_host( laird_session_handle session, FQDN address );
 int dcal_set_port( laird_session_handle session, unsigned int port );
 int dcal_set_user( laird_session_handle session, char * user );
 int dcal_set_pw( laird_session_handle session, char * pw );
-//TODO int dcal_set_key( laird_session_handle session, char * keydata, int size);
+int dcal_set_keyfile( laird_session_handle session, char * filename);
+int dcal_get_auth_methods ( laird_session_handle s, int * method );
 int dcal_session_open ( laird_session_handle session );
 int dcal_session_close( laird_session_handle session);
 

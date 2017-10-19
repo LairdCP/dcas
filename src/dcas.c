@@ -25,6 +25,11 @@ static struct SSH_DATA ssh_data = {
 	.port = 2222,
 	.verbosity = 0,
 	.ssh_disconnect = false,
+	.method = METHOD_PUBKEY,
+	.host_keys_folder = {0},
+	.auth_keys_folder = {0},
+	.username = {0},
+	.password = {0},
 };
 
 void sigproc(int unused)
@@ -49,6 +54,8 @@ int main(int argc,char *argv[])
 	static struct option longopt[] = {
 		{"host_keys", required_argument, NULL, 'k'},
 		{"auth_keys", required_argument, NULL, 'a'},
+		{"user", required_argument, NULL, 'u'},
+		{"password", required_argument, NULL, 'P'},
 		{"help", no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'v'},
 		{"port", required_argument, NULL, 'p'},
@@ -68,24 +75,22 @@ int main(int argc,char *argv[])
 	DBGDEBUG("%s\n", cmdline);
 #endif
 
-	strncpy(ssh_data.host_keys_folder, DEFAULT_KEYS_FOLDER, MAX_PATH-1);
-	strncpy(ssh_data.auth_keys_folder, DEFAULT_AUTH_FOLDER, MAX_PATH-1);
-ssh_data.host_keys_folder[MAX_PATH-1] = 0;
-ssh_data.auth_keys_folder[MAX_PATH-1] = 0;
+	strncpy(ssh_data.host_keys_folder, DEFAULT_KEYS_FOLDER, MAX_PATH-2);
+	strncpy(ssh_data.auth_keys_folder, DEFAULT_AUTH_FOLDER, MAX_PATH-2);
 
 	// Process command-line options
 	runtime_name = argv[0]; // Save if needed later
 	int c;
 	int optidx=0;
-	while ((c=getopt_long(argc,argv,"k:a:hvp:s",longopt,&optidx)) != -1) {
+	while ((c=getopt_long(argc,argv,"k:a:u:P:hvp:s",longopt,&optidx)) != -1) {
 		switch(c) {
 		case 'k':
 			DBGDEBUG( "Setting host key directory:%s\n", optarg );
-			strncpy(ssh_data.host_keys_folder, optarg, MAX_PATH-1);
+			strncpy(ssh_data.host_keys_folder, optarg, MAX_PATH-2);
 			break;
 		case 'a':
 			DBGDEBUG( "Setting auth key directory:%s\n", optarg );
-			strncpy(ssh_data.auth_keys_folder, optarg, MAX_PATH-1);
+			strncpy(ssh_data.auth_keys_folder, optarg, MAX_PATH-2);
 			break;
 		case 'v':
 			PrintVersion();
@@ -103,7 +108,22 @@ ssh_data.auth_keys_folder[MAX_PATH-1] = 0;
 			ssh_data.ssh_disconnect=true;
 			DBGDEBUG("ssh_disconnection option enabled\n");
 			break;
+		case 'u':
+			strncpy(ssh_data.username, optarg, MAX_USER-2);
+			break;
+		case 'P':
+			strncpy(ssh_data.password, optarg, MAX_PASSWORD-2);
+			ssh_data.method |= METHOD_PASSWORD;
+			break;
+
 		}
+	}
+
+	// if either username or password is set, both are required.
+	if ((ssh_data.username[0] && !ssh_data.password[0])
+		|| (!ssh_data.username[0] && ssh_data.password[0])) {
+		printf("\n\n\t\tif password or user name is set, both are required\n");
+		ExitClean(1);
 	}
 
 	sem_init(&ssh_data.thread_list, 0, MAX_THREADS);
@@ -132,9 +152,13 @@ void PrintHelp( void )
 	       "\t%s [-Dkvhp]\n\n"
 	       "\t\t-k <path>\thost key directory path\n"
 	       "\t\t-a <path>\tauthorized_keys directory path\n"
+	       "\t\t-u <username>\tuser name (enables password authentication)\n"
+	       "\t\t             \t -requires password\n"
+	       "\t\t-P <Password>\tPassword (enables password authentication)\n"
+	       "\t\t             \t -requires username\n"
 	       "\t\t-p <port>\ttcp port to listen for connections\n"
-	       "\t\t-s\tssh_disable - disables WiFi on last authorized ssh \n"
-	                             "session disconnect"
+	       "\t\t-s \t\tssh_disable - disables WiFi on last authorized ssh \n"
+	       "\t\t   \t\t              session disconnect\n"
 	       "\t\t-v\t\tversion\n"
 	       "\t\t-h\t\thelp\n"
 	       "\n\n", runtime_name);
