@@ -3,8 +3,14 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-#define MAX_PATH 128
-#define MAX_THREADS 20
+#define MAX_PATH     128
+#define MAX_USER     128
+#define MAX_PASSWORD 128
+#define MAX_THREADS  20
+
+// bitwise methods
+#define METHOD_PUBKEY   1
+#define METHOD_PASSWORD 2
 
 // A variable of this structure contains data that is available to all threads
 struct SSH_DATA {
@@ -17,6 +23,9 @@ struct SSH_DATA {
 	sem_t thread_list;
 	ssh_bind sshbind;
 	bool ssh_disconnect;
+	char password[MAX_PASSWORD];
+	char username[MAX_PASSWORD];
+	int method;
 };
 
 int run_sshserver( struct SSH_DATA *);

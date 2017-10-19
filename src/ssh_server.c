@@ -20,9 +20,6 @@
 #include <sdc_sdk.h>
 #include "ssh_server.h"
 
-#define SSHD_USER "libssh"
-#define SSHD_PASSWORD "libssh"
-
 typedef struct LIST_T {
 	pthread_t data;
 	struct LIST_T * next;
@@ -73,9 +70,9 @@ int auth_password (ssh_session session, const char *user,
 		auth_data->auth_error=1;
 		return SSH_AUTH_DENIED;
 	}
-	if(strcmp(user, SSHD_USER))
+	if(strncmp(user, auth_data->ssh_data->username, MAX_USER))
 		return SSH_AUTH_DENIED;
-	if(strcmp(password, SSHD_PASSWORD))
+	if(strncmp(password, auth_data->ssh_data->password, MAX_PASSWORD))
 		return SSH_AUTH_DENIED;
 	auth_data->auth = 1;
 	return SSH_AUTH_SUCCESS; // authenticated
@@ -125,40 +122,6 @@ int auth_publickey(ssh_session session, const char *user,
 		}else
 			DBGDEBUG("%s file missing\n", ffn);
 
-#if 0
-		// this code was when I was iterating through every file.
-		// will remove once its in git so I have history of it should I need it
-		DIR *entry;
-		struct dirent *dir;
-		char path[1024];
-		snprintf(path, 1024, "%s/", auth_data->ssh_data->keys_folder);
-		entry = opendir(path);
-		if (entry) {
-			while ((dir = readdir(entry)) != NULL) {
-				if (dir->d_type == DT_REG) {
-					snprintf(ffn, 1024, "%s/%s", path, dir->d_name);
-					DBGINFO("trying %s\n", ffn);
-					result = ssh_pki_import_pubkey_file( ffn, &key );
-					if ((result != SSH_OK) || (key==NULL)){
-						DBGINFO("skipping\n");
-						continue;
-					}
-					result = ssh_key_cmp( key, pubkey, SSH_KEY_CMP_PUBLIC );
-					DBGINFO("Result is %d\n", result);
-					ssh_key_free(key);
-					if (result == 0) {
-						auth_data->auth = 1;
-						DBGINFO("key match\n");
-						closedir(entry);
-						return SSH_AUTH_SUCCESS;
-					}
-					DBGINFO("key mismatch\n");
-				}
-			}
-			closedir(entry);
-		} else
-			DBGERROR("unable to open key directory :%s\n", path);
-#endif
 	} else
 		DBGERROR("missing ssh_data\n");
 
@@ -300,9 +263,10 @@ void * ssh_session_thread( void *param )
 		goto exit_session;
 	}
 
-// TODO - only allow password if startup parameter present
-//	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_PUBLICKEY);
-	ssh_set_auth_methods(session, SSH_AUTH_METHOD_PUBLICKEY);
+	if(ssh_data->method & METHOD_PASSWORD)
+		ssh_set_auth_methods(session, SSH_AUTH_METHOD_PASSWORD | SSH_AUTH_METHOD_PUBLICKEY);
+	else
+		ssh_set_auth_methods(session, SSH_AUTH_METHOD_PUBLICKEY);
 
 	mainloop = ssh_event_new();
 	if (mainloop==NULL){
@@ -484,8 +448,8 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	};
 	dispatch_data.auth_data = &auth_data;
 
-//todo allow this if set on startup parameter
-//	cb.auth_password_function = auth_password;
+	if(ssh_data->method & METHOD_PASSWORD)
+		cb.auth_password_function = auth_password;
 
 	ssh_callbacks_init(&cb);
 
