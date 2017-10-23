@@ -119,6 +119,7 @@ int auth_publickey(ssh_session session, const char *user,
 					return SSH_AUTH_SUCCESS;
 				}
 			}
+		DBGDEBUG("no match found in %s\n", ffn);
 		}else
 			DBGDEBUG("%s file missing\n", ffn);
 
