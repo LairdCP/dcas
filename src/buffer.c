@@ -1170,6 +1170,7 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 			SDKUNLOCK(sdk_lock);
 		}
 
+		ns(Interface_interface_name_create_str(B, ns(String_value(interface_name))));
 		ns(Interface_auto_start_add(B, auto_start));
 		ns(Interface_method_create_str(B, method));
 		ns(Interface_address_create_str(B, address));
