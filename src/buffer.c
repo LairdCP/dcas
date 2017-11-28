@@ -1088,7 +1088,8 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 				DBGDEBUG("%s is not configured for bridging\n",ns(String_value(interface_name)));
 			} else {
 				if (strstr(bridge_ports,(char*)ns(String_value(interface_name))) != NULL){
-					ret = LRD_ENI_GetMethod((char*)LRD_ENI_INTERFACE_BRIDGE, method, sizeof(method));
+					char method_bridge[STR_SZ];
+					ret = LRD_ENI_GetMethod((char*)LRD_ENI_INTERFACE_BRIDGE, method_bridge, sizeof(method_bridge));
 					if (ret == SDCERR_SUCCESS){
 						ns(Interface_bridge_add(B, 1));
 					}
