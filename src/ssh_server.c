@@ -223,7 +223,7 @@ void empty_completed_thread_list( struct THREAD_LIST *completed)
 void * ssh_session_thread( void *param )
 {
 	process_buf_struct buf_struct = {0};
-	ssh_channel chan=0;
+	ssh_channel chan=NULL;
 	int nbytes, r;
 	struct DISPATCH_DATA *dispatch_data = (struct DISPATCH_DATA*)param;
 	struct AUTH_DATA *auth_data = dispatch_data->auth_data;
@@ -252,7 +252,6 @@ void * ssh_session_thread( void *param )
 	buf_struct.exit_called = dispatch_data->exit_called;
 	buf_struct.sdk_lock = &dispatch_data->sdk_lock;
 	buf_struct.verify_handshake = true;
-	buf_struct.chan = chan;
 
 	if (ssh_handle_key_exchange(session)) {
 		DBGERROR("Error: ssh_handle_key_exchange: %s\n", ssh_get_error(session));
@@ -319,6 +318,7 @@ void * ssh_session_thread( void *param )
 
 	DBGDEBUG("Client connected!\n");
 	int extra;
+	buf_struct.chan = chan;
 	do {
 		nbytes=ssh_channel_read(chan,*buf, *buf_size, 0);
 		if(nbytes >0)
