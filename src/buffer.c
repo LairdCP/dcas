@@ -448,7 +448,7 @@ int do_enable_disable(flatcc_builder_t *B, pthread_mutex_t *sdk_lock, bool enabl
 #define usercert(p) (char*)ns(Profile_security4(p))
 #define usercertpassword(p) (char*)ns(Profile_security5(p))
 
-#define weplen(s) ((strlen(s)==5)?WEPLEN_40BIT:(strlen(s)==16)?WEPLEN_128BIT:WEPLEN_NOT_SET)
+#define weplen(s) ((strlen(s)==5)?WEPLEN_40BIT:(strlen(s)==13)?WEPLEN_128BIT:WEPLEN_NOT_SET)
 
 SDCERR LRD_WF_AutoProfileCfgControl(const char *name, unsigned char enable);
 SDCERR LRD_WF_AutoProfileCfgStatus(const char *name, unsigned char *enabled);
