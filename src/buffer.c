@@ -532,10 +532,12 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 				case EAP_EAPTLS:
 					SetEAPTLSCred(&config, user(profile), usercert(profile),
 					              CERT_FILE, cacert(profile));
+					SetUserCertPassword(&config, usercertpassword(profile));
 					break;
 				case EAP_PEAPTLS:
 					SetPEAPTLSCred(&config, user(profile), usercert(profile),
 					              CERT_FILE, cacert(profile));
+					SetUserCertPassword(&config, usercertpassword(profile));
 					break;
 				case EAP_NONE:
 				case EAP_WAPI_CERT:
