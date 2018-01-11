@@ -486,7 +486,6 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 
 	switch(config.wepType) {
 		case WEP_ON:
-		case WEP_AUTO:
 			ret = SetMultipleWEPKeys( &config, ns(Profile_weptxkey(profile)),
 			                weplen(ns(Profile_security1(profile))),
 			                (unsigned char*)ns(Profile_security1(profile)),
@@ -496,6 +495,11 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 			                (unsigned char*)ns(Profile_security3(profile)),
 			                weplen(ns(Profile_security4(profile))),
 			                (unsigned char*)ns(Profile_security4(profile)));
+
+			if (ret){
+				DBGERROR("%s: SetMultipleWEPKeys() failed with %d\n", __func__, ret);
+				goto earlyexit;
+			}
 			break;
 
 		case WPA_PSK:
@@ -555,6 +559,7 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 
 	LRD_WF_AutoProfileCfgControl(config.configName, ns(Profile_autoprofile(profile)));
 	SDKUNLOCK(sdk_lock);
+earlyexit:
 	build_handshake_ack(B, ret);
 	return ret;
 }
@@ -601,9 +606,7 @@ int do_get_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 
 		switch(config.wepType){
 			case WEP_ON:
-			case WEP_AUTO:
 			case WEP_CKIP:
-			case WEP_AUTO_CKIP:
 			{
 				unsigned char key[4][26];
 				WEPLEN klen[4];
