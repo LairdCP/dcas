@@ -939,6 +939,7 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	SDCGlobalConfig gcfg = {0};
 	int ret;
 
+	SDKLOCK(sdk_lock);
 	GetGlobalSettings(&gcfg); // not all values are settable via the host
 	                          // ie - some values are not supported on the
 	                          // current hardware. Pull the current settings
@@ -948,11 +949,15 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	//TODO we ought to do some assertion that the cmd_table is a globals
 	gt = ns(Command_cmd_pl(cmd));
 
-	SDKLOCK(sdk_lock);
 	gcfg.authServerType = ns(Globals_auth(gt));
 	gcfg.aLRS = ns(Globals_channel_set_a(gt));
 	gcfg.bLRS = ns(Globals_channel_set_b(gt));
-	ret = LRD_WF_AutoProfileControl((unsigned char)ns(Globals_auto_profile(gt)));
+
+	if (ns(Globals_auto_profile(gt)))
+		gcfg.autoProfile |= 1;
+	else
+		gcfg.autoProfile &= ~1;
+
 	gcfg.BeaconMissTimeout = ns(Globals_beacon_miss(gt));
 	gcfg.CCXfeatures = ns(Globals_ccx(gt));
 	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH);
@@ -975,16 +980,16 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	gcfg.TTLSInnerMethod = ns(Globals_ttls(gt));
 	gcfg.uAPSD = ns(Globals_uapsd(gt));
 	gcfg.WMEenabled = ns(Globals_wmm(gt));
-	if(!ret)
-		ret = setIgnoreNullSsid((unsigned long) ns(Globals_ignore_null_ssid(gt)));
 	gcfg.DFSchannels = ns(Globals_dfs_channels(gt));
 
-	SDKUNLOCK(sdk_lock);
+	setIgnoreNullSsid((unsigned long) ns(Globals_ignore_null_ssid(gt)));
 
 	ret = SetGlobalSettings(&gcfg);
 	if(ret) DBGERROR("SetGlobalsettings() returned %d at line %d\n", ret, __LINE__);
 	else
 		DBGINFO("SetGlobalSettings() returned success\n");
+
+	SDKUNLOCK(sdk_lock);
 
 	build_handshake_ack(B, ret);
 	return 0;
