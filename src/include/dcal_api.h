@@ -26,7 +26,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 //these three values define the API version between DCAL and DCAS
 #define LAIRD_SDK_MSB       3
 #define LAIRD_DCAL_MAJOR    1
-#define LAIRD_DCAL_MINOR    6
+#define LAIRD_DCAL_MINOR    7
 #include "version.h"
 
 #ifdef __cplusplus
@@ -361,6 +361,16 @@ int dcal_wifi_global_get_ttls_inner_method( laird_global_handle global,
 
 int dcal_wifi_global_set_uapsd( laird_global_handle global, bool uapsd);
 int dcal_wifi_global_get_uapsd( laird_global_handle global, bool *uapsd);
+
+typedef enum _uapsd_bitmask{
+	AC_VO = 1<<0, //Access Category Voice
+	AC_VI = 1<<1, //Access Category Video
+	AC_BK = 1<<2, //Access Category Background
+	AC_BE = 1<<3, //Access Category Best Effort
+} UAPSD_MASK;
+
+int dcal_wifi_global_set_uapsd_mask( laird_global_handle global, unsigned int uapsd);
+int dcal_wifi_global_get_uapsd_mask( laird_global_handle global, unsigned int *uapsd);
 
 int dcal_wifi_global_set_wmm( laird_global_handle global, bool wmm);
 int dcal_wifi_global_get_wmm( laird_global_handle global, bool *wmm);
