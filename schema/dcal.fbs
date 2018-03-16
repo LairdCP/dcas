@@ -79,7 +79,7 @@ table Globals {
 	rts: uint;
 	scan_dfs: uint;
 	ttls: uint;
-	uapsd: bool;
+	uapsd: uint;
 	wmm: bool;
 	ignore_null_ssid: bool;
 	dfs_channels: uint;
