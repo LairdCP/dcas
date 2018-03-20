@@ -398,6 +398,10 @@ exit_channel:
 		ssh_channel_close(chan);
 	chan = NULL;
 exit_disconnect:
+	if (mainloop){
+		ssh_event_remove_session(mainloop, session);
+		ssh_event_free(mainloop);
+	}
 	ssh_disconnect(session);
 exit_session:
 	ssh_free(session);
