@@ -1029,10 +1029,10 @@ int do_get_interface(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex
 		int nat = -1;
 		char method6[STR_SZ];
 		char dhcp6[STR_SZ];
-		char address6[STR_SZ];
-		char netmask6[STR_SZ];
-		char gateway6[STR_SZ];
-		char nameserver6[STR_SZ];
+		char address6[IP6_STR_SZ];
+		char netmask6[IP6_STR_SZ];
+		char gateway6[IP6_STR_SZ];
+		char nameserver6[IP6_STR_SZ];
 		int nat6 = -1;
 
 		flatcc_builder_reset(B);
