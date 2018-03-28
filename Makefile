@@ -117,13 +117,13 @@ lib.local/libssh: lib
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
-	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.so.4.4.0
+	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.so.4.4.1
 endif
 ifeq ($(UNAME_S),Darwin)
-	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.4.4.0.dylib
+	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.4.4.1.dylib
 endif
 $(LIBSSH_TARGET): lib lib.local/libssh
-	cd lib.local/libssh && git checkout 4d43fbfb50710055352c4fda812b6dc98143d336
+	cd lib.local/libssh && git checkout libssh-0.7.3
 	mkdir -p lib.local/libssh/build
 	cd lib.local/libssh/build && cmake ..
 	cd lib.local/libssh/build && make
