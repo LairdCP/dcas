@@ -2093,8 +2093,7 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 		ns(Filexfer_file_path_create_str(B, localfilename));
 		ns(Filexfer_size_add(B,stats.st_size));
 		ns(Filexfer_mode_add(B,stats.st_mode));
-		cmd_pl.Filexfer = ns(Filexfer_end(B));
-		cmd_pl.type = ns(Cmd_pl_Filexfer);
+		cmd_pl = ns(Cmd_pl_as_Filexfer(ns(Filexfer_end(B))));
 
 		flatbuffers_buffer_start(B, ns(Command_type_identifier));
 		ns(Command_start(B));
