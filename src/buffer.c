@@ -1,5 +1,4 @@
-#define _BSD_SOURCE
-#define _POSIX_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -2030,7 +2029,7 @@ cleanup:
 //negative value - unrecoverable error
 int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, pthread_mutex_t *sdk_lock, ssh_channel chan)
 {
-	char *buf, *localfilename = NULL;
+	char *buf = NULL, *localfilename = NULL;
 	ns(String_table_t) string;
 	ns(Filexfer_table_t) fxt;
 	ns(Cmd_pl_union_ref_t) cmd_pl;
