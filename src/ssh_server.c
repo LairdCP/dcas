@@ -578,7 +578,7 @@ cleanup:
 	if (*dispatch_data.exit_called){
 		// call system's reboot command rather then reboot API directly as the system version may do additional syncing.
 		printf("***** calling reboot *****\n");
-		system("reboot");
+		r=system("reboot");
 	}
 	return r;
 }
