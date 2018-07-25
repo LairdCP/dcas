@@ -380,8 +380,8 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 
 	FILE *in = popen( "sdcsupp -qv", "r");
 	if (in){
-		fgets(supplicant, STR_SZ, in);
-		supplicant[STR_SZ-1]=0;
+		if (fgets(supplicant, STR_SZ, in) == NULL)
+			supplicant[0]=0;
 		pclose(in);
 	} else
 		strcpy(supplicant, "none");
@@ -390,7 +390,8 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	if ((sysfile==-1) && (errno==ENOENT))
 		sysfile = open ("/etc/summit-release", O_RDONLY);
 	if (sysfile > 1){
-		read(sysfile, release, STR_SZ);
+		if (read(sysfile, release, STR_SZ) < 0)
+			release[0]=0;
 		release[STR_SZ-1]=0;
 		close(sysfile);
 	}else
