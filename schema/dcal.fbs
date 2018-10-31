@@ -227,6 +227,7 @@ enum Commands:uint {
 	FWUPDATE,
 	CLIFILE,
 	GETLOGS,
+	SWUPDATE,
 	}
 
 table Command {

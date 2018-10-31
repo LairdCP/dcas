@@ -2213,6 +2213,34 @@ int do_fw_update(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t *
 	return ret;
 }
 
+int do_swupdate(flatcc_builder_t *B, ns(Command_table_t) cmd)
+{
+	char * commandline = NULL;
+	ns(String_table_t) string;
+	int ret = 0;
+	struct stat buffer;
+
+#define SWUPDATE "/usr/bin/swupdate"
+	string = ns(Command_cmd_pl(cmd));
+
+	if (((char*)ns(String_value(string)))==NULL)
+		return DCAL_INVALID_PARAMETER;
+
+	if (stat(SWUPDATE,&buffer))
+		return DCAL_REMOTE_USER_CMD_NOT_EXIST;
+
+	commandline = (char*)malloc(strlen(SWUPDATE)+
+		                    strlen((char*)ns(String_value(string)))+2);
+	if (commandline==NULL)
+		return DCAL_WB_INSUFFICIENT_MEMORY;
+
+	sprintf(commandline, "%s %s", SWUPDATE, (char*)ns(String_value(string)));
+	ret = do_system_command(B, commandline);
+	free(commandline);
+
+	return ret;
+}
+
 //return codes:
 //0 - success
 //positive value - benign error
@@ -2394,8 +2422,12 @@ int process_command(flatcc_builder_t *B, ns(Command_table_t) cmd,
 			return do_send_file(B, cmd, NULL, sdk_lock, chan);
 			break;
 		case ns(Commands_FWUPDATE):
-			DBGDEBUG("FILEPUSH\n");
+			DBGDEBUG("FWUPDATE\n");
 			return do_fw_update(B, cmd, sdk_lock);
+			break;
+		case ns(Commands_SWUPDATE):
+			DBGDEBUG("SWUPDATE\n");
+			return do_swupdate(B, cmd);
 			break;
 		case ns(Commands_CLIFILE):
 			DBGDEBUG("CLIFILE\n");
