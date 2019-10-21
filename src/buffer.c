@@ -1920,7 +1920,7 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 {
 	ns(Filexfer_table_t) fxt;
 	int ret = DCAL_SUCCESS;
-	FILE *file = NULL;
+	int fd;
 	int size,mode,r,w,total=0;
 	char *full_path=NULL;
 	char *tmpfile=NULL;
@@ -1976,8 +1976,8 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 		sprintf(full_file_path,"%s/%s",path,filename);
 		DBGINFO("incoming file to be saved to: %s\n",full_file_path);
 
-		file = fopen(full_file_path, "w");
-		if (!file) {
+		fd = open(full_file_path, O_CREAT|O_WRONLY|O_TRUNC);
+		if (fd < 0) {
 			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
 			goto cleanup;
 		}
@@ -1996,8 +1996,8 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 				goto closefile;
 			} else if (r==0)
 				break;
-			w = fwrite(buf, r, 1, file);
-			if (w<0) {
+			w = write(fd, buf, r);
+			if (w != r) {
 				DBGERROR("error writing local file: %s\n", full_path);
 				ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
 				goto closefile;
@@ -2005,11 +2005,17 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 			total += r;
 		} while (total < size);
 
+		if(fsync(fd) < 0)
+		{
+			DBGERROR("error syncing data to local file: %s\n", full_path);
+			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
+			goto closefile;
+		}
 		DBGINFO("Wrote %d bytes to fs\n", total);
 		build_handshake_ack(B, ret);
 	}
 closefile:
-	fclose(file);
+	close(fd);
 	if (!ret)
 		chmod(full_path, mode);
 
