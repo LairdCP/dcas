@@ -506,13 +506,20 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
 
-	strncpy(key_tmp, ssh_data->host_keys_folder, MAX_PATH);
-	strncat(key_tmp, "/ssh_host_dsa_key", MAX_PATH);
-	DBGINFO("DSA host key: %s\n",key_tmp);
-	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp );
-	strncpy(key_tmp, ssh_data->host_keys_folder, MAX_PATH);
-	strncat(key_tmp, "/ssh_host_rsa_key", MAX_PATH);
-	DBGINFO("RSA host key: %s\n",key_tmp);
+	if (snprintf(key_tmp, MAX_PATH, "%s/ssh_host_dsa_key", ssh_data->host_keys_folder) < 0) {
+		DBGERROR("DSA host key path too long\n");
+		r = 1;
+		goto cleanup;
+	}
+	DBGINFO("DSA host key: %s\n", key_tmp);
+	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp);
+
+	if (snprintf(key_tmp, MAX_PATH, "%s/ssh_host_rsa_key", ssh_data->host_keys_folder) < 0) {
+		DBGERROR("RSA host key path too long\n");
+		r = 1;
+		goto cleanup;
+	}
+	DBGINFO("RSA host key: %s\n", key_tmp);
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
 
 	if(ssh_bind_listen(*sshbind)<0) {
