@@ -468,12 +468,12 @@ int do_set_profile(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	//TODO we ought to do some assertion that the cmd_table is a profile
 	profile = ns(Command_cmd_pl(cmd));
 
-	strncpy(config.configName, ns(Profile_name(profile)), CONFIG_NAME_SZ);
+	strncpy(config.configName, ns(Profile_name(profile)), CONFIG_NAME_SZ - 1);
 	assert(flatbuffers_uint8_vec_len(ns(Profile_ssid(profile))) <= SSID_SZ);
 
 	memcpy(&config.SSID, ns(Profile_ssid(profile)), flatbuffers_uint8_vec_len(ns(Profile_ssid(profile))));
 
-	strncpy(config.clientName, ns(Profile_client_name(profile)), CLIENT_NAME_SZ);
+	strncpy(config.clientName, ns(Profile_client_name(profile)), CLIENT_NAME_SZ - 1);
 
 	config.txPower = ns(Profile_txPwr(profile));
 	config.authType = ns(Profile_auth(profile));
@@ -970,7 +970,7 @@ int do_set_globals(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_t
 	else
 		gcfg.CCXfeatures = CCX_OFF;
 
-	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH);
+	strncpy(gcfg.certPath, ns(Globals_cert_path(gt)), MAX_CERT_PATH - 1);
 	if(ns(Globals_date_check(gt)))
 		gcfg.suppInfo |= SUPPINFO_TLS_TIME_CHECK;
 	else
@@ -1878,13 +1878,13 @@ char *strdup(const char *src)
 {
 	if (src==NULL)
 		return NULL;
+
 	size_t len = strlen(src);
 	char *copy = malloc(len + 1);
 	if (copy == NULL)
 			return NULL;
 
-	strncpy(copy, src, len);
-	copy[len]=0;
+	memcpy(copy, src, len + 1);
 	return copy;
 }
 
