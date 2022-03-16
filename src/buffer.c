@@ -1874,18 +1874,12 @@ int do_set_time(flatcc_builder_t *B, ns(Command_table_t) cmd)
 	return 0;
 }
 
-char *strdup(const char *src)
+static char *lrd_strdup(const char *src)
 {
-	if (src==NULL)
+	if (src == NULL)
 		return NULL;
 
-	size_t len = strlen(src);
-	char *copy = malloc(len + 1);
-	if (copy == NULL)
-			return NULL;
-
-	memcpy(copy, src, len + 1);
-	return copy;
+	return strdup(src);
 }
 
 		//send start ack
@@ -1938,16 +1932,16 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 	{
 		size = ns(Filexfer_size(fxt));
 		mode = ns(Filexfer_mode(fxt));
-		full_path = strdup(ns(Filexfer_file_path(fxt)));
+		full_path = lrd_strdup(ns(Filexfer_file_path(fxt)));
 
 		if(!full_path) {
 			ret = DCAL_NO_MEMORY;
 			goto cleanup;
 		}
 
-		tmpfile = strdup(full_path);
+		tmpfile = lrd_strdup(full_path);
 		if(tmpfile)
-			filename = strdup(basename(full_path));
+			filename = lrd_strdup(basename(full_path));
 
 		if(ns(Filexfer_cert(fxt))){
 			ret = GetGlobalSettings(&gcfg);
@@ -1976,7 +1970,7 @@ int do_receive_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mutex_
 		sprintf(full_file_path,"%s/%s",path,filename);
 		DBGINFO("incoming file to be saved to: %s\n",full_file_path);
 
-		fd = open(full_file_path, O_CREAT|O_WRONLY|O_TRUNC);
+		fd = open(full_file_path, O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR);
 		if (fd < 0) {
 			ret = DCAL_REMOTE_FILE_ACCESS_DENIED;
 			goto cleanup;
@@ -2053,11 +2047,11 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 		} else {
 			// the filename parameter allows the dcas internals to specify a
 			// file outside of the /tmp directory
-			localfilename = strdup(filename);
+			localfilename = lrd_strdup(filename);
 		}
 	} else {//extract filename from Command_Table
-		char *tmp = strdup(ns(String_value(string)));
-		char *bname = strdup(basename(tmp));
+		char *tmp = lrd_strdup(ns(String_value(string)));
+		char *bname = lrd_strdup(basename(tmp));
 		localfilename = malloc(sizeof(TMPDIR)+strlen(bname)+2);
 		if (localfilename){
 			sprintf(localfilename,"%s/%s",TMPDIR,bname);
@@ -2265,8 +2259,8 @@ int do_process_cli_file(flatcc_builder_t *B, ns(Command_table_t) cmd, pthread_mu
 	if(flatbuffers_string_len(ns(String_value(string)))==0)
 		return DCAL_INVALID_PARAMETER;
 
-	tmppath=strdup(ns(String_value(string)));
-	tmpname=strdup(basename(tmppath));
+	tmppath=lrd_strdup(ns(String_value(string)));
+	tmpname=lrd_strdup(basename(tmppath));
 
 	filename=malloc(strlen(TMPDIR)+strlen(tmpname)+2);
 	if(!filename) {
