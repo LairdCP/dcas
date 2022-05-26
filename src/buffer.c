@@ -20,6 +20,7 @@
 
 #include "dcal_builder.h"
 #include "dcal_verifier.h"
+
 #undef ns
 #define ns(x) FLATBUFFERS_WRAP_NAMESPACE(DCAL_session, x)
 #include "flatcc/support/hexdump.h"

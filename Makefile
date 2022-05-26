@@ -49,9 +49,15 @@ CXX ?= g++
 #
 # Source and object files
 #
-SOURCES := $(wildcard src/*.cpp src/*.c)
-OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))
-DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
+SOURCES = $(wildcard src/*.cpp src/*.c)
+OBJECTS = $(addsuffix .o,$(basename $(SOURCES)))
+DEPENDS = $(patsubst %.o,%.d,$(OBJECTS))
+GENERATED = dcal_builder.h dcal_verifier.h
+
+# dependency generation
+ifneq "$(MAKECMDGOALS)" "clean"
+  -include $(DEPENDS)
+endif
 
 #
 # GENERATION RULES
@@ -60,16 +66,19 @@ DEPENDS := $(addsuffix .d,$(basename $(SOURCES)))
 # and depencency files as long as you have your OBJECTS
 # setup right
 
+%.d: %.cpp
+	$(COMPILE.cpp) -D FLATCC_PORTABLE -MM -MG -MT $(patsubst %.d,%.o,$@) $< -o $@
+
+%.d: %.c
+	$(COMPILE.c) -D FLATCC_PORTABLE -MM -MG -MT $(patsubst %.d,%.o,$@) $< -o $@
+
 %.o: %.cpp
-	$(COMPILE.cpp) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
+	$(COMPILE.cpp) -D FLATCC_PORTABLE -o $@ $<
 
 %.o: %.c
-	$(COMPILE.c) -D FLATCC_PORTABLE -MMD -MP -o $@ $<
-
-GENERATED = 	schema/dcal_reader.h
+	$(COMPILE.c) -D FLATCC_PORTABLE -o $@ $<
 
 .DONE:
-
 
 #
 # TARGETS
@@ -78,14 +87,15 @@ GENERATED = 	schema/dcal_reader.h
 .PHONY: all
 all : static unit $(TARGET) check
 
-$(TARGET) :  debug_msg build_msg $(GENERATED) $(OBJECTS)
+$(TARGET) :  debug_msg build_msg $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
 
-schema/dcal_reader.h : schema/dcal.fbs
+$(GENERATED) : fbs
+$(addprefix schema/,$(GENERATED)) : fbs
+
+.PHONY: fbs
+fbs : schema/dcal.fbs
 	cd schema && $(FLATCC) -ca dcal.fbs
-
-
-
 
 .PHONY: static
 static :
@@ -94,7 +104,7 @@ ifdef CPPCHECK
 	@echo "ccpcheck version $(CPPCHECK)"
 	cppcheck $(CPPCHECK_FLAGS) src
 else
-	    @echo ccpcheck not found - skipping
+	@echo ccpcheck not found - skipping
 endif
 
 .PHONY: unit
@@ -119,9 +129,11 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.so.4.4.2
 endif
+
 ifeq ($(UNAME_S),Darwin)
 	LIBSSH_TARGET := lib.local/libssh/build/src/libssh.4.4.2.dylib
 endif
+
 $(LIBSSH_TARGET): lib lib.local/libssh
 	cd lib.local/libssh && git checkout libssh-0.7.5
 	mkdir -p lib.local/libssh/build
@@ -164,10 +176,7 @@ dcas-test: test/client/dcas-client do-dcas-test
 
 .PHONY: clean
 clean :
-	-rm -f $(OBJECTS)
-	-rm -f $(DEPENDS)
-	-rm -f $(TARGET)
-	-rm -f schema/*.h
+	-rm -f schema/*.h src/*.o src/*.d $(TARGET)
 
 .PHONY: cleanall
 cleanall: clean
@@ -192,9 +201,4 @@ help:
 
 ifdef DUMPVARS
 $(foreach v, $(.VARIABLES), $(info $(v) = $($(v))))
-endif
-
-# dependency generation
-ifneq "$(MAKECMDGOALS)" "clean"
-  -include $(addsuffix .d,$(basename $(SOURCES)))
 endif
