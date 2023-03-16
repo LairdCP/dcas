@@ -212,7 +212,6 @@ int is_handshake_valid( ns(Handshake_table_t) handshake)
 	#ifdef DEBUG_BUILD
 	const char * ip;
 	#endif
-	int ret;
 
 	if (ns(Handshake_server(handshake)) == true) {
 		DBGERROR("Handshake marked as from server\n");
@@ -348,7 +347,6 @@ int build_version(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 	int sdk;
 	unsigned int driver;
 	unsigned int dcas;
-	unsigned int dcal;
 	char firmware[STR_SZ];
 	char supplicant[STR_SZ];
 	char release[STR_SZ];
@@ -775,7 +773,6 @@ int do_get_profile_list(flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 //negative value - unrecoverable error
 int do_get_scanlist (flatcc_builder_t *B, pthread_mutex_t *sdk_lock)
 {
-	unsigned long count = 0;
 	static int initial_num_entries = 250;
 	int i, num_entries, ret = SDCERR_SUCCESS;
 	int again = 1;
@@ -2033,7 +2030,6 @@ int do_send_file(flatcc_builder_t *B, ns(Command_table_t) cmd, char *filename, p
 {
 	char *buf = NULL, *localfilename = NULL;
 	ns(String_table_t) string;
-	ns(Filexfer_table_t) fxt;
 	ns(Cmd_pl_union_ref_t) cmd_pl;
 	struct stat stats;
 	int fd, r, w, ret = DCAL_SUCCESS;
