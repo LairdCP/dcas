@@ -3,7 +3,7 @@
 	#error "error: undefined development version - please define via build system"
 #endif
 
-#define LRD_BUILD_NUMBER "11.0.0.175"
+#define LRD_BUILD_NUMBER "11.0.0.176"
 
 #ifndef LAIRD_SDK_MSB
 #error "error: API version defines not present"
