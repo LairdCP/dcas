@@ -5,11 +5,10 @@
 #include <semaphore.h>
 #include <errno.h>
 #include <assert.h>
+#include <glob.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
-#define __USE_POSIX199309
-#include <time.h>
 
 #include "debug.h"
 #include "buffer.h"
@@ -47,7 +46,7 @@ struct DISPATCH_DATA {
 	pthread_mutex_t sdk_lock; // SDK is not multithread safe. 
 	pthread_mutex_t auth_lock;  // allow one authentication at a time - simplifies sharing of cb data
 	sem_t thread_init; // used between dispatcher and thread to know when
-	                   // safe to reuse dispatcher's stack variable
+					   // safe to reuse dispatcher's stack variable
 	sem_t *thread_list;// used to limit total active threads
 	struct THREAD_LIST completed;
 	struct AUTH_DATA * auth_data;
@@ -59,8 +58,8 @@ struct DISPATCH_DATA {
 
 // - Authentication functions
 int auth_password (ssh_session session, const char *user,
-                                        const char *password,
-                                        void *userdata)
+										const char *password,
+										void *userdata)
 {
 	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
 	DBGINFO("%s: Authenticating user ->%s<-\n", __func__, user);
@@ -79,9 +78,9 @@ int auth_password (ssh_session session, const char *user,
 }
 
 int auth_publickey(ssh_session session, const char *user,
-                                        struct ssh_key_struct *pubkey,
-                                        char signature_state,
-                                        void *userdata)
+										struct ssh_key_struct *pubkey,
+										char signature_state,
+										void *userdata)
 {
 	struct AUTH_DATA *auth_data = (struct AUTH_DATA*) userdata;
 	DBGINFO("%s Authenticating user ->%s<-\n", __func__, user);
@@ -105,7 +104,7 @@ int auth_publickey(ssh_session session, const char *user,
 		struct stat buf;
 
 		snprintf(ffn, 1024, "%s/authorized_keys",
-		                      auth_data->ssh_data->auth_keys_folder);
+							  auth_data->ssh_data->auth_keys_folder);
 		if (stat(ffn, &buf) == 0){
 			result = ssh_pki_import_pubkey_file( ffn, &key );
 			if ((result != SSH_OK) || (key==NULL))
@@ -155,8 +154,8 @@ static int shell_request(ssh_session session, ssh_channel channel, void *userdat
 }
 
 struct ssh_channel_callbacks_struct channel_cb = {
-    .channel_pty_request_function = pty_request,
-    .channel_shell_request_function = shell_request
+	.channel_pty_request_function = pty_request,
+	.channel_shell_request_function = shell_request
 };
 
 static ssh_channel new_session_channel(ssh_session session, void *userdata){
@@ -244,8 +243,8 @@ void * ssh_session_thread( void *param )
 	session = dispatch_data->session; //we will be responsible for session now
 	dispatch_data->session = NULL;    //ensure no other thread points to this
 	sem_post(&dispatch_data->thread_init);  // signal dispatch routine thread
-	                                        // that we've copied the pointer
-	                                        // from it's stack data
+											// that we've copied the pointer
+											// from it's stack data
 
 	buf_struct.buf = malloc(INITIAL_BUFSIZE);
 	buf_struct.buf_size = INITIAL_BUFSIZE;
@@ -312,7 +311,7 @@ void * ssh_session_thread( void *param )
 
 	if(!chan) {
 		DBGERROR("Error: client did not ask for a channel session (%s)\n",
-		       ssh_get_error(session));
+			   ssh_get_error(session));
 		goto exit_disconnect;
 	}
 
@@ -414,7 +413,7 @@ exit_session:
 	}
 
 	add_thread_to_completed_list( &dispatch_data->completed,
-	                               pthread_self());
+								   pthread_self());
 	sem_post(dispatch_data->thread_list);
 	if (*buf_struct.exit_called)
 		kill(getpid(), SIGINT);
@@ -424,28 +423,15 @@ exit_session:
 	return NULL;
 }
 
-int check_with_timeout( int return_value, int test_value,
-                        int * remaining, struct timespec *sleep_time)
-{
-	if ((return_value==0)                  //worked
-	     || (*remaining==0)                //time has expired
-	     || (test_value != return_value))  //error other then what we are testing for
-		return 0;
-
-	(*remaining)--;
-	nanosleep(sleep_time, NULL);
-	return 1;
-}
-
 int run_sshserver( struct SSH_DATA *ssh_data )
 {
 	ssh_bind *sshbind = &ssh_data->sshbind;
-	int i,r;
-	char key_tmp[MAX_PATH];
+	int i, r = 0, k;
 	pthread_t child;
-	struct timespec sleep_duration;
+	glob_t glob_result;
+	char key_tmp[MAX_PATH];
 	struct DISPATCH_DATA dispatch_data = {0};
-	struct AUTH_DATA auth_data= {0};
+	struct AUTH_DATA auth_data = {0};
 	struct ssh_server_callbacks_struct cb = {
 		.userdata = &auth_data,
 		.auth_pubkey_function = auth_publickey,
@@ -453,42 +439,16 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	};
 	dispatch_data.auth_data = &auth_data;
 
-	if(ssh_data->method & METHOD_PASSWORD)
+	if (ssh_data->method & METHOD_PASSWORD)
 		cb.auth_password_function = auth_password;
 
 	ssh_callbacks_init(&cb);
 
-	sleep_duration.tv_sec =0;
-	sleep_duration.tv_nsec = 10000000; // 10 ms
-
-	i = 10;
-	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.sdk_lock,NULL),
-	                           EAGAIN, &i, &sleep_duration));
-	if (r)
-	{
-		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
-		return 1;
-	}
-
-	i=10;
-	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.completed.lock,NULL),
-	                           EAGAIN, &i, &sleep_duration));
-	if (r)
-	{
-		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
-		return 1;
-	}
-
-	i=10;
-	while( check_with_timeout (r=pthread_mutex_init(&dispatch_data.auth_lock,NULL),
-	                           EAGAIN, &i, &sleep_duration));
-	if (r)
-	{
-		DBGERROR("Mutex init failed with: %s\n", strerror(errno));
-		return 1;
-	}
-
 	sem_init(&dispatch_data.auth_clients_sem, 0, 0);
+
+	pthread_mutex_init(&dispatch_data.sdk_lock, NULL);
+	pthread_mutex_init(&dispatch_data.auth_lock, NULL);
+	pthread_mutex_init(&dispatch_data.completed.lock, NULL);
 
 	dispatch_data.alive = &ssh_data->alive;
 	dispatch_data.exit_called = &ssh_data->reboot_on_exit;
@@ -500,29 +460,32 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
 
-	*sshbind=ssh_bind_new();
-
+	*sshbind = ssh_bind_new();
 
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_LOG_VERBOSITY, &(ssh_data->verbosity));
 	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_BINDPORT, &(ssh_data->port));
 
-	if (snprintf(key_tmp, MAX_PATH, "%s/ssh_host_dsa_key", ssh_data->host_keys_folder) < 0) {
-		DBGERROR("DSA host key path too long\n");
+	if (snprintf(key_tmp, sizeof(key_tmp), "%s/ssh_host_*_key", ssh_data->host_keys_folder) < 0) {
+		DBGERROR("Host key path too long\n");
 		r = 1;
 		goto cleanup;
 	}
-	DBGINFO("DSA host key: %s\n", key_tmp);
-	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_DSAKEY, key_tmp);
 
-	if (snprintf(key_tmp, MAX_PATH, "%s/ssh_host_rsa_key", ssh_data->host_keys_folder) < 0) {
-		DBGERROR("RSA host key path too long\n");
+	glob(key_tmp, GLOB_TILDE, NULL, &glob_result);
+	for (i = 0, k = 0; i < glob_result.gl_pathc; ++i) {
+		if (ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_HOSTKEY, glob_result.gl_pathv[i]) == SSH_OK)
+			++k;
+		else
+			DBGERROR("Error setting host key: %s\n", ssh_get_error(*sshbind));
+	}
+	globfree(&glob_result);
+
+	if (k == 0) {
 		r = 1;
 		goto cleanup;
 	}
-	DBGINFO("RSA host key: %s\n", key_tmp);
-	ssh_bind_options_set(*sshbind, SSH_BIND_OPTIONS_RSAKEY, key_tmp);
 
-	if(ssh_bind_listen(*sshbind)<0) {
+	if (ssh_bind_listen(*sshbind) != SSH_OK) {
 		DBGERROR("Error listening to socket: %s\n", ssh_get_error(*sshbind));
 		r = 1;
 		goto cleanup;
@@ -532,8 +495,8 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 	while (ssh_data->alive)
 	{
 		sem_wait(dispatch_data.thread_list); // this semaphore is initialized
-		                                     // to MAX_THREADS and ensures that
-		                                     // we adhere to that limit
+											 // to MAX_THREADS and ensures that
+											 // we adhere to that limit
 		if (!ssh_data->alive)
 			break;
 
@@ -546,7 +509,7 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 		dispatch_data.session = ssh_new();
 		r = ssh_bind_accept(*sshbind, dispatch_data.session);
 
-		if(r==SSH_ERROR) {
+		if (r == SSH_ERROR) {
 			if (ssh_data->alive)
 				DBGERROR("Error accepting a connection: %s\n", ssh_get_error(*sshbind));
 			ssh_free(dispatch_data.session);
@@ -556,10 +519,7 @@ int run_sshserver( struct SSH_DATA *ssh_data )
 
 		ssh_set_server_callbacks(dispatch_data.session, &cb);
 
-		i = 10;
-		while (check_with_timeout (r=pthread_create(&child, NULL,
-		                                            &ssh_session_thread, &dispatch_data),
-		                            EAGAIN, &i, &sleep_duration));
+		r = pthread_create(&child, NULL, &ssh_session_thread, &dispatch_data);
 		if (r) {
 			DBGERROR("Unable to start child thread: %s\n", strerror(r));
 			ssh_data->alive = false; // kill any children
